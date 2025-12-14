@@ -1,0 +1,139 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build",
+            "type": "shell",
+            "command": "make",
+            "args": ["build"],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": ["$go"],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Test",
+            "type": "shell",
+            "command": "make",
+            "args": ["test"],
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            },
+            "problemMatcher": ["$go"],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Test (Verbose)",
+            "type": "shell",
+            "command": "make",
+            "args": ["test-verbose"],
+            "group": "test",
+            "problemMatcher": ["$go"],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Test (Coverage)",
+            "type": "shell",
+            "command": "make",
+            "args": ["test-cover"],
+            "group": "test",
+            "problemMatcher": ["$go"],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Test (Race Detector)",
+            "type": "shell",
+            "command": "make",
+            "args": ["test-race"],
+            "group": "test",
+            "problemMatcher": ["$go"],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Benchmark",
+            "type": "shell",
+            "command": "make",
+            "args": ["bench"],
+            "group": "test",
+            "problemMatcher": ["$go"],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Format",
+            "type": "shell",
+            "command": "make",
+            "args": ["fmt"],
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "silent",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Vet",
+            "type": "shell",
+            "command": "make",
+            "args": ["vet"],
+            "problemMatcher": ["$go"],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Lint",
+            "type": "shell",
+            "command": "make",
+            "args": ["lint"],
+            "problemMatcher": ["$go"],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Clean",
+            "type": "shell",
+            "command": "make",
+            "args": ["clean"],
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "silent",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "All (fmt, vet, test, build)",
+            "type": "shell",
+            "command": "make",
+            "args": ["all"],
+            "group": "build",
+            "problemMatcher": ["$go"],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        }
+    ]
+}
