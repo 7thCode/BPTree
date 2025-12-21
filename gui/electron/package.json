@@ -1,0 +1,12 @@
+{
+  "name": "bptree-gui",
+  "version": "1.0.0",
+  "description": "Interactive GUI for BPTree testing",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^28.0.0"
+  }
+}

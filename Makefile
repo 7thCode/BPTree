@@ -10,22 +10,26 @@ GOMOD=$(GOCMD) mod
 
 # Build output
 BINARY_NAME=bptree
+SERVER_NAME=bptree-server
 BUILD_DIR=bin
 
 # Package paths
 PKG=./...
-MAIN_PKG=.
+SERVER_PKG=./cmd/server
 
-.PHONY: all build test test-verbose test-cover clean fmt vet lint tidy bench help
+.PHONY: all build build-server test test-verbose test-cover clean fmt vet lint tidy bench help
 
 ## all: Run fmt, vet, test, and build
 all: fmt vet test build
 
-## build: Build the binary
-build:
-	@echo "Building..."
+## build: Build the server binary
+build: build-server
+
+## build-server: Build the HTTP server
+build-server:
+	@echo "Building server..."
 	@mkdir -p $(BUILD_DIR)
-	$(GOBUILD) -o $(BUILD_DIR)/$(BINARY_NAME) $(MAIN_PKG)
+	$(GOBUILD) -o $(BUILD_DIR)/$(SERVER_NAME) $(SERVER_PKG)
 
 ## test: Run tests
 test:

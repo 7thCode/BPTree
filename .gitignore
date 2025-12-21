@@ -45,3 +45,10 @@ dist/
 *.db
 *.idx
 test_*.dat
+
+# GUI - Electron
+gui/electron/node_modules/
+gui/electron/package-lock.json
+
+# GUI - Go server binary
+gui/server/bptree-server
