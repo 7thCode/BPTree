@@ -48,6 +48,27 @@ func Open(path string) (*BPTree, error) {
 	}, nil
 }
 
+// Checkpoint syncs all changes to disk.
+func (t *BPTree) Checkpoint() error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.pager.Checkpoint()
+}
+
+// Count returns the number of key-value pairs in the tree.
+// This is an O(n) operation.
+func (t *BPTree) Count() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	count := 0
+	t.scanInternal(0, ^uint64(0), func(key, value uint64) bool {
+		count++
+		return true
+	})
+	return count
+}
+
 // Close closes the B+Tree and underlying file.
 func (t *BPTree) Close() error {
 	return t.pager.Close()
@@ -67,24 +88,13 @@ func (t *BPTree) Find(key uint64) (uint64, bool) {
 	return t.search(rootID, key)
 }
 
-// search recursively searches for a key starting from the given page.
-func (t *BPTree) search(pageID pager.PageID, key uint64) (uint64, bool) {
-	data := t.pager.GetPage(pageID)
-	if data == nil {
-		return 0, false
-	}
+// FindRange iterates over all key-value pairs where start <= key <= end.
+// The callback function is called for each pair. Return false to stop iteration.
+func (t *BPTree) FindRange(start, end uint64, fn func(key, value uint64) bool) error {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
 
-	nodeType := node.GetNodeType(data)
-
-	if nodeType == node.NodeTypeLeaf {
-		leaf := node.NewLeafNode(data, false)
-		return leaf.Get(key)
-	}
-
-	// Internal node - find child to search
-	internal := node.NewInternalNode(data, false)
-	childID := internal.GetChildForKey(key)
-	return t.search(childID, key)
+	return t.scanInternal(start, end, fn)
 }
 
 // Insert inserts or updates a key-value pair.
@@ -126,6 +136,66 @@ func (t *BPTree) Insert(key, value uint64) error {
 	}
 
 	return nil
+}
+
+// Delete removes a key from the tree.
+// Returns true if the key was found and removed.
+func (t *BPTree) Delete(key uint64) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	rootID := t.pager.RootPage()
+	if rootID == 0 {
+		return false
+	}
+
+	deleted, _ := t.deleteRecursive(rootID, key)
+
+	// Check if root needs to shrink
+	if deleted {
+		rootData := t.pager.GetPage(rootID)
+		rootType := node.GetNodeType(rootData)
+
+		if rootType == node.NodeTypeInternal {
+			internal := node.NewInternalNode(rootData, false)
+			if internal.KeyCount() == 0 {
+				// Root has no keys, promote only child to root
+				newRootID := internal.GetChild(0)
+				t.pager.SetRootPage(newRootID)
+				t.pager.FreePage(rootID)
+			}
+		} else {
+			// Root is leaf
+			leaf := node.NewLeafNode(rootData, false)
+			if leaf.KeyCount() == 0 {
+				// Tree is now empty
+				t.pager.SetRootPage(0)
+				t.pager.FreePage(rootID)
+			}
+		}
+	}
+
+	return deleted
+}
+
+// search recursively searches for a key starting from the given page.
+func (t *BPTree) search(pageID pager.PageID, key uint64) (uint64, bool) {
+	data := t.pager.GetPage(pageID)
+	if data == nil {
+		return 0, false
+	}
+
+	nodeType := node.GetNodeType(data)
+
+	if nodeType == node.NodeTypeLeaf {
+		leaf := node.NewLeafNode(data, false)
+		return leaf.Get(key)
+	}
+
+	// Internal node - find child to search
+	internal := node.NewInternalNode(data, false)
+	childID := internal.GetChildForKey(key)
+	return t.search(childID, key)
 }
 
 // insert recursively inserts a key-value pair.
@@ -227,46 +297,6 @@ func (t *BPTree) insertInternal(data []byte, pageID pager.PageID, key, value uin
 	}
 
 	return midKey, newPageID, nil
-}
-
-// Delete removes a key from the tree.
-// Returns true if the key was found and removed.
-func (t *BPTree) Delete(key uint64) bool {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
-	rootID := t.pager.RootPage()
-	if rootID == 0 {
-		return false
-	}
-
-	deleted, _ := t.deleteRecursive(rootID, key)
-
-	// Check if root needs to shrink
-	if deleted {
-		rootData := t.pager.GetPage(rootID)
-		rootType := node.GetNodeType(rootData)
-
-		if rootType == node.NodeTypeInternal {
-			internal := node.NewInternalNode(rootData, false)
-			if internal.KeyCount() == 0 {
-				// Root has no keys, promote only child to root
-				newRootID := internal.GetChild(0)
-				t.pager.SetRootPage(newRootID)
-				t.pager.FreePage(rootID)
-			}
-		} else {
-			// Root is leaf
-			leaf := node.NewLeafNode(rootData, false)
-			if leaf.KeyCount() == 0 {
-				// Tree is now empty
-				t.pager.SetRootPage(0)
-				t.pager.FreePage(rootID)
-			}
-		}
-	}
-
-	return deleted
 }
 
 // deleteRecursive recursively deletes a key, handling underflow.
@@ -402,15 +432,6 @@ func (t *BPTree) handleUnderflow(parent *node.InternalNode, childIdx int, parent
 	}
 }
 
-// FindRange iterates over all key-value pairs where start <= key <= end.
-// The callback function is called for each pair. Return false to stop iteration.
-func (t *BPTree) FindRange(start, end uint64, fn func(key, value uint64) bool) error {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-
-	return t.scanInternal(start, end, fn)
-}
-
 // scanInternal is the internal scan implementation without locking.
 // Caller must hold at least a read lock.
 func (t *BPTree) scanInternal(start, end uint64, fn func(key, value uint64) bool) error {
@@ -468,25 +489,4 @@ func (t *BPTree) findLeaf(pageID pager.PageID, key uint64) pager.PageID {
 	internal := node.NewInternalNode(data, false)
 	childID := internal.GetChildForKey(key)
 	return t.findLeaf(childID, key)
-}
-
-// Checkpoint syncs all changes to disk.
-func (t *BPTree) Checkpoint() error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return t.pager.Checkpoint()
-}
-
-// Count returns the number of key-value pairs in the tree.
-// This is an O(n) operation.
-func (t *BPTree) Count() int {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-
-	count := 0
-	t.scanInternal(0, ^uint64(0), func(key, value uint64) bool {
-		count++
-		return true
-	})
-	return count
 }
