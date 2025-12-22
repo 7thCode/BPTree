@@ -2,6 +2,7 @@
 //
 // The tree stores uint64 keys and uint64 values, optimized for concurrent reads.
 // Changes are persisted to disk via checkpoint operations.
+// Supports multiple root trees identified by rootID.
 //
 // Example:
 //
@@ -11,10 +12,11 @@
 //	}
 //	defer tree.Close()
 //
-//	tree.Insert(1, 100)
-//	tree.Insert(2, 200)
+//	rootID, _ := tree.CreateRoot()
+//	tree.Insert(rootID, 1, 100)
+//	tree.Insert(rootID, 2, 200)
 //
-//	val, ok := tree.Find(1)
+//	val, ok := tree.Find(rootID, 1)
 //	if ok {
 //	    fmt.Println(val) // 100
 //	}
@@ -30,7 +32,11 @@ import (
 	"github.com/oda/bptree2/pkg/bptree2/bpager"
 )
 
+// RootID is the identifier for a root tree.
+type RootID = bpager.RootID
+
 // BPTree is a B+Tree that stores uint64 keys and values.
+// Supports multiple root trees.
 type BPTree struct {
 	pager *bpager.Pager
 	mu    sync.RWMutex // Protects writes, allows concurrent reads
@@ -55,14 +61,14 @@ func (t *BPTree) Checkpoint() error {
 	return t.pager.Checkpoint()
 }
 
-// Count returns the number of key-value pairs in the tree.
+// Count returns the number of key-value pairs in a tree.
 // This is an O(n) operation.
-func (t *BPTree) Count() int {
+func (t *BPTree) Count(rootID RootID) int {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
 	count := 0
-	t.scanInternal(0, ^uint64(0), func(key, value uint64) bool {
+	t.scanInternal(rootID, 0, ^uint64(0), func(key, value uint64) bool {
 		count++
 		return true
 	})
@@ -74,38 +80,60 @@ func (t *BPTree) Close() error {
 	return t.pager.Close()
 }
 
-// Find retrieves a value by key.
+// CreateRoot creates a new root tree and returns its ID.
+func (t *BPTree) CreateRoot() (RootID, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.pager.CreateRoot()
+}
+
+// DeleteRoot deletes a root tree.
+// Note: This only removes the root reference.
+func (t *BPTree) DeleteRoot(rootID RootID) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.pager.DeleteRoot(rootID)
+}
+
+// RootCount returns the number of active root trees.
+func (t *BPTree) RootCount() uint64 {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.pager.RootCount()
+}
+
+// Find retrieves a value by key from a specific root tree.
 // Returns (value, true) if found, (0, false) otherwise.
-func (t *BPTree) Find(key uint64) (uint64, bool) {
+func (t *BPTree) Find(rootID RootID, key uint64) (uint64, bool) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
-	rootID := t.pager.RootPage()
-	if rootID == 0 {
+	rootPageID := t.pager.GetRootPage(rootID)
+	if rootPageID == 0 {
 		return 0, false // Empty tree
 	}
 
-	return t.search(rootID, key)
+	return t.search(rootPageID, key)
 }
 
 // FindRange iterates over all key-value pairs where start <= key <= end.
 // The callback function is called for each pair. Return false to stop iteration.
-func (t *BPTree) FindRange(start, end uint64, fn func(key, value uint64) bool) error {
+func (t *BPTree) FindRange(rootID RootID, start, end uint64, fn func(key, value uint64) bool) error {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
-	return t.scanInternal(start, end, fn)
+	return t.scanInternal(rootID, start, end, fn)
 }
 
-// Insert inserts or updates a key-value pair.
-func (t *BPTree) Insert(key, value uint64) error {
+// Insert inserts or updates a key-value pair in a specific root tree.
+func (t *BPTree) Insert(rootID RootID, key, value uint64) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	rootID := t.pager.RootPage()
+	rootPageID := t.pager.GetRootPage(rootID)
 
 	// Empty tree - create first leaf
-	if rootID == 0 {
+	if rootPageID == 0 {
 		newPageID, err := t.pager.AllocatePage()
 		if err != nil {
 			return fmt.Errorf("failed to allocate root: %w", err)
@@ -113,12 +141,14 @@ func (t *BPTree) Insert(key, value uint64) error {
 		data := t.pager.GetPage(newPageID)
 		leaf := bnode.NewLeafNode(data, true)
 		leaf.Put(key, value)
-		t.pager.SetRootPage(newPageID)
+		if err := t.pager.SetRootPage(rootID, newPageID); err != nil {
+			return err
+		}
 		return nil
 	}
 
 	// Insert into existing tree
-	splitKey, newChildID, err := t.insert(rootID, key, value)
+	splitKey, newChildID, err := t.insert(rootPageID, key, value)
 	if err != nil {
 		return err
 	}
@@ -131,46 +161,48 @@ func (t *BPTree) Insert(key, value uint64) error {
 		}
 		data := t.pager.GetPage(newRootID)
 		newRoot := bnode.NewInternalNode(data, true)
-		newRoot.InitRoot(rootID, newChildID, splitKey)
-		t.pager.SetRootPage(newRootID)
+		newRoot.InitRoot(rootPageID, newChildID, splitKey)
+		if err := t.pager.SetRootPage(rootID, newRootID); err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
-// Delete removes a key from the tree.
+// Delete removes a key from a specific root tree.
 // Returns true if the key was found and removed.
-func (t *BPTree) Delete(key uint64) bool {
+func (t *BPTree) Delete(rootID RootID, key uint64) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	rootID := t.pager.RootPage()
-	if rootID == 0 {
+	rootPageID := t.pager.GetRootPage(rootID)
+	if rootPageID == 0 {
 		return false
 	}
 
-	deleted, _ := t.deleteRecursive(rootID, key)
+	deleted, _ := t.deleteRecursive(rootPageID, key)
 
 	// Check if root needs to shrink
 	if deleted {
-		rootData := t.pager.GetPage(rootID)
+		rootData := t.pager.GetPage(rootPageID)
 		rootType := bnode.GetNodeType(rootData)
 
 		if rootType == bnode.NodeTypeInternal {
 			internal := bnode.NewInternalNode(rootData, false)
 			if internal.KeyCount() == 0 {
 				// Root has no keys, promote only child to root
-				newRootID := internal.GetChild(0)
-				t.pager.SetRootPage(newRootID)
-				t.pager.FreePage(rootID)
+				newRootPageID := internal.GetChild(0)
+				t.pager.SetRootPage(rootID, newRootPageID)
+				t.pager.FreePage(rootPageID)
 			}
 		} else {
 			// Root is leaf
 			leaf := bnode.NewLeafNode(rootData, false)
 			if leaf.KeyCount() == 0 {
 				// Tree is now empty
-				t.pager.SetRootPage(0)
-				t.pager.FreePage(rootID)
+				t.pager.SetRootPage(rootID, 0)
+				t.pager.FreePage(rootPageID)
 			}
 		}
 	}
@@ -452,14 +484,14 @@ func (t *BPTree) handleUnderflow(parent *bnode.InternalNode, childIdx int, paren
 
 // scanInternal is the internal scan implementation without locking.
 // Caller must hold at least a read lock.
-func (t *BPTree) scanInternal(start, end uint64, fn func(key, value uint64) bool) error {
-	rootID := t.pager.RootPage()
-	if rootID == 0 {
+func (t *BPTree) scanInternal(rootID RootID, start, end uint64, fn func(key, value uint64) bool) error {
+	rootPageID := t.pager.GetRootPage(rootID)
+	if rootPageID == 0 {
 		return nil // Empty tree
 	}
 
 	// Find the leaf containing start key
-	leafID := t.findLeaf(rootID, start)
+	leafID := t.findLeaf(rootPageID, start)
 	if leafID == 0 {
 		return nil
 	}

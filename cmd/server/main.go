@@ -15,11 +15,15 @@ import (
 	"github.com/oda/bptree2/pkg/bptree2"
 )
 
+// Default rootID for single-tree mode (backward compatibility)
+const defaultRootID bptree2.RootID = 0
+
 // Server holds the BPTree instance and provides HTTP handlers.
 type Server struct {
-	tree *bptree2.BPTree
-	path string
-	mu   sync.RWMutex
+	tree   *bptree2.BPTree
+	path   string
+	rootID bptree2.RootID
+	mu     sync.RWMutex
 }
 
 // Response is a generic JSON response.
@@ -140,7 +144,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if s.tree != nil {
-		status.Count = s.tree.Count()
+		status.Count = s.tree.Count(s.rootID)
 	}
 
 	writeJSON(w, http.StatusOK, Response{Success: true, Data: status})
@@ -177,15 +181,23 @@ func (s *Server) handleOpen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Create default root if needed (for new databases)
+	rootID, err := tree.CreateRoot()
+	if err != nil {
+		// Root might already exist, use default
+		rootID = defaultRootID
+	}
+
 	s.tree = tree
 	s.path = req.Path
+	s.rootID = rootID
 
 	writeJSON(w, http.StatusOK, Response{
 		Success: true,
 		Data: StatusResponse{
 			Connected: true,
 			Path:      req.Path,
-			Count:     tree.Count(),
+			Count:     tree.Count(rootID),
 		},
 	})
 }
@@ -241,7 +253,7 @@ func (s *Server) handleFind(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	val, found := s.tree.Find(key)
+	val, found := s.tree.Find(s.rootID, key)
 	if !found {
 		writeJSON(w, http.StatusNotFound, Response{Error: "key not found"})
 		return
@@ -273,7 +285,7 @@ func (s *Server) handleInsert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.tree.Insert(req.Key, req.Value); err != nil {
+	if err := s.tree.Insert(s.rootID, req.Key, req.Value); err != nil {
 		writeJSON(w, http.StatusInternalServerError, Response{Error: fmt.Sprintf("insert failed: %v", err)})
 		return
 	}
@@ -310,7 +322,7 @@ func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	deleted := s.tree.Delete(key)
+	deleted := s.tree.Delete(s.rootID, key)
 	writeJSON(w, http.StatusOK, Response{
 		Success: true,
 		Data:    map[string]bool{"deleted": deleted},
@@ -352,7 +364,7 @@ func (s *Server) handleFindRange(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var items []KeyValue
-	err = s.tree.FindRange(start, end, func(key, value uint64) bool {
+	err = s.tree.FindRange(s.rootID, start, end, func(key, value uint64) bool {
 		items = append(items, KeyValue{Key: key, Value: value})
 		return true
 	})
@@ -404,7 +416,7 @@ func (s *Server) handleCount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	count := s.tree.Count()
+	count := s.tree.Count(s.rootID)
 	writeJSON(w, http.StatusOK, Response{
 		Success: true,
 		Data:    map[string]int{"count": count},
@@ -449,7 +461,7 @@ func (s *Server) handleBenchmark(w http.ResponseWriter, r *http.Request) {
 	// Benchmark Insert
 	insertStart := time.Now()
 	for i, key := range keys {
-		if err := s.tree.Insert(key, uint64(i)); err != nil {
+		if err := s.tree.Insert(s.rootID, key, uint64(i)); err != nil {
 			writeJSON(w, http.StatusInternalServerError, Response{Error: fmt.Sprintf("insert failed at %d: %v", i, err)})
 			return
 		}
@@ -460,7 +472,7 @@ func (s *Server) handleBenchmark(w http.ResponseWriter, r *http.Request) {
 	hits := 0
 	searchStart := time.Now()
 	for _, key := range keys {
-		if _, found := s.tree.Find(key); found {
+		if _, found := s.tree.Find(s.rootID, key); found {
 			hits++
 		}
 	}
@@ -480,7 +492,7 @@ func (s *Server) handleBenchmark(w http.ResponseWriter, r *http.Request) {
 		SearchAvgUs:     float64(searchDuration.Microseconds()) / float64(req.Count),
 		SearchOpsPerSec: float64(req.Count) / searchDuration.Seconds(),
 		SearchHitRate:   float64(hits) / float64(req.Count) * 100,
-		FinalCount:      s.tree.Count(),
+		FinalCount:      s.tree.Count(s.rootID),
 	}
 
 	writeJSON(w, http.StatusOK, Response{Success: true, Data: result})

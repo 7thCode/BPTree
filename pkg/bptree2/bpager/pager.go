@@ -14,6 +14,9 @@ const (
 
 	// GrowthFactor determines how much to grow the file when expanding.
 	GrowthFactor = 2
+
+	// ReservedMarker is a special value marking a root slot as reserved but empty.
+	ReservedMarker PageID = ^PageID(0)
 )
 
 // Pager manages page-based I/O using memory-mapped files.
@@ -59,14 +62,15 @@ func (p *Pager) loadOrInitMeta() error {
 		// Initialize new file
 		p.meta.Magic = Magic
 		p.meta.Version = Version
-		p.meta.RootPage = 0
+		p.meta.RootCount = 0
 		p.meta.PageCount = 1 // Meta page is page 0
 		p.meta.FreeList = 0
+		// RootTable is already zeroed
 		p.writeMeta()
 	} else if p.meta.Magic != Magic {
 		return fmt.Errorf("invalid file format: bad magic number")
 	} else if p.meta.Version != Version {
-		return fmt.Errorf("unsupported version: %d", p.meta.Version)
+		return fmt.Errorf("unsupported version: %d (expected %d)", p.meta.Version, Version)
 	}
 
 	return nil
@@ -141,19 +145,77 @@ func (p *Pager) AllocatePage() (PageID, error) {
 	return newPageID, nil
 }
 
-// RootPage returns the root page ID.
-func (p *Pager) RootPage() PageID {
+// GetRootPage returns the root page ID for a given rootID.
+// Returns 0 if the rootID is invalid or the tree doesn't exist.
+func (p *Pager) GetRootPage(rootID RootID) PageID {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	return p.meta.RootPage
+	page := p.meta.GetRootPage(rootID)
+	// Reserved marker means empty tree
+	if page == ReservedMarker {
+		return 0
+	}
+	return page
 }
 
-// SetRootPage sets the root page ID.
-func (p *Pager) SetRootPage(id PageID) {
+// SetRootPage sets the root page ID for a given rootID.
+func (p *Pager) SetRootPage(rootID RootID, pageID PageID) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.meta.RootPage = id
+
+	if !p.meta.SetRootPage(rootID, pageID) {
+		return fmt.Errorf("invalid rootID: %d (max: %d)", rootID, MaxRoots-1)
+	}
 	p.writeMeta()
+	return nil
+}
+
+// CreateRoot creates a new root and returns its ID.
+// Returns error if maximum roots reached.
+func (p *Pager) CreateRoot() (RootID, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	// Find first available slot (0 means unused)
+	for i := RootID(0); i < MaxRoots; i++ {
+		if p.meta.RootTable[i] == 0 {
+			// Mark as reserved (not free, but empty tree)
+			p.meta.RootTable[i] = ReservedMarker
+			p.meta.RootCount++
+			p.writeMeta()
+			return i, nil
+		}
+	}
+
+	return 0, fmt.Errorf("maximum roots reached: %d", MaxRoots)
+}
+
+// DeleteRoot deletes a root tree.
+// Note: This only removes the root reference, does not free pages.
+func (p *Pager) DeleteRoot(rootID RootID) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if rootID >= MaxRoots {
+		return fmt.Errorf("invalid rootID: %d", rootID)
+	}
+
+	if p.meta.RootTable[rootID] != 0 {
+		p.meta.RootTable[rootID] = 0
+		if p.meta.RootCount > 0 {
+			p.meta.RootCount--
+		}
+		p.writeMeta()
+	}
+
+	return nil
+}
+
+// RootCount returns the number of active roots.
+func (p *Pager) RootCount() uint64 {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.meta.RootCount
 }
 
 // PageCount returns the total number of allocated pages.

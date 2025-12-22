@@ -103,7 +103,10 @@ func TestPersistence(t *testing.T) {
 	id, _ := p1.AllocatePage()
 	page := p1.GetPage(id)
 	copy(page[0:5], []byte("hello"))
-	p1.SetRootPage(id)
+
+	// Use rootID 0
+	var rootID uint64 = 0
+	p1.SetRootPage(rootID, id)
 	p1.Checkpoint()
 	p1.Close()
 
@@ -114,8 +117,8 @@ func TestPersistence(t *testing.T) {
 	}
 	defer p2.Close()
 
-	if p2.RootPage() != id {
-		t.Errorf("root page should be %d, got %d", id, p2.RootPage())
+	if p2.GetRootPage(rootID) != id {
+		t.Errorf("root page should be %d, got %d", id, p2.GetRootPage(rootID))
 	}
 
 	page2 := p2.GetPage(id)
@@ -145,5 +148,50 @@ func TestGrowth(t *testing.T) {
 
 	if p.PageCount() != 301 { // 300 allocated + meta page
 		t.Errorf("expected page count 301, got %d", p.PageCount())
+	}
+}
+
+func TestMultiRoots(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "test.db")
+
+	p, err := bpager.Open(path)
+	if err != nil {
+		t.Fatalf("bpager.Open failed: %v", err)
+	}
+	defer p.Close()
+
+	// Create multiple roots
+	root1, err := p.CreateRoot()
+	if err != nil {
+		t.Fatalf("CreateRoot failed: %v", err)
+	}
+	root2, err := p.CreateRoot()
+	if err != nil {
+		t.Fatalf("CreateRoot failed: %v", err)
+	}
+
+	// Allocate pages and assign to roots
+	page1, _ := p.AllocatePage()
+	page2, _ := p.AllocatePage()
+
+	p.SetRootPage(root1, page1)
+	p.SetRootPage(root2, page2)
+
+	// Verify
+	if p.GetRootPage(root1) != page1 {
+		t.Errorf("root1 should point to page %d", page1)
+	}
+	if p.GetRootPage(root2) != page2 {
+		t.Errorf("root2 should point to page %d", page2)
+	}
+
+	// Delete root1
+	p.DeleteRoot(root1)
+	if p.GetRootPage(root1) != 0 {
+		t.Error("root1 should be 0 after delete")
+	}
+	if p.GetRootPage(root2) != page2 {
+		t.Error("root2 should not be affected")
 	}
 }
