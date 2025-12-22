@@ -1,0 +1,126 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "🚀 Backend Server",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/cmd/server",
+            "cwd": "${workspaceFolder}/cmd/server",
+            "env": {
+                "PORT": "8080"
+            },
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "🎨 Frontend (Electron)",
+            "type": "node",
+            "request": "launch",
+            "runtimeExecutable": "${workspaceFolder}/gui/electron/node_modules/.bin/electron",
+            "runtimeArgs": [
+                "${workspaceFolder}/gui/electron/main.js"
+            ],
+            "cwd": "${workspaceFolder}/gui/electron",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Test Current File",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${file}",
+            "cwd": "${fileDirname}"
+        },
+        {
+            "name": "Test All (bptree2)",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${workspaceFolder}/pkg/bptree2",
+            "args": [
+                "-v"
+            ],
+            "cwd": "${workspaceFolder}/pkg/bptree2"
+        },
+        {
+            "name": "Test bmmap Package",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${workspaceFolder}/pkg/bptree2/bmmap",
+            "args": [
+                "-v"
+            ],
+            "cwd": "${workspaceFolder}/pkg/bptree2/bmmap"
+        },
+        {
+            "name": "Test bnode Package",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${workspaceFolder}/pkg/bptree2/bnode",
+            "args": [
+                "-v"
+            ],
+            "cwd": "${workspaceFolder}/pkg/bptree2/bnode"
+        },
+        {
+            "name": "Test bpager Package",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${workspaceFolder}/pkg/bptree2/bpager",
+            "args": [
+                "-v"
+            ],
+            "cwd": "${workspaceFolder}/pkg/bptree2/bpager"
+        },
+        {
+            "name": "Test Specific Function",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${fileDirname}",
+            "args": [
+                "-test.run",
+                "^${input:testName}$",
+                "-v"
+            ],
+            "cwd": "${fileDirname}"
+        },
+        {
+            "name": "Debug Current Test",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${file}",
+            "showLog": true,
+            "trace": "verbose",
+            "cwd": "${fileDirname}"
+        }
+    ],
+    "compounds": [
+        {
+            "name": "🌲 Full Stack (Backend + Frontend)",
+            "configurations": [
+                "🚀 Backend Server",
+                "🎨 Frontend (Electron)"
+            ],
+            "stopAll": true,
+            "presentation": {
+                "hidden": false,
+                "group": "fullstack",
+                "order": 1
+            }
+        }
+    ],
+    "inputs": [
+        {
+            "id": "testName",
+            "type": "promptString",
+            "description": "Test function name (e.g., TestBasicOperations)",
+            "default": "Test"
+        }
+    ]
+}
