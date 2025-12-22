@@ -12,12 +12,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/oda/bptree/pkg/bptree"
+	"github.com/oda/bptree2/pkg/bptree2"
 )
 
 // Server holds the BPTree instance and provides HTTP handlers.
 type Server struct {
-	tree *bptree.BPTree
+	tree *bptree2.BPTree
 	path string
 	mu   sync.RWMutex
 }
@@ -171,7 +171,7 @@ func (s *Server) handleOpen(w http.ResponseWriter, r *http.Request) {
 		s.tree.Close()
 	}
 
-	tree, err := bptree.Open(req.Path)
+	tree, err := bptree2.Open(req.Path)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, Response{Error: fmt.Sprintf("failed to open database: %v", err)})
 		return
