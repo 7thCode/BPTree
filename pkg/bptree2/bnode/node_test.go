@@ -1,14 +1,15 @@
-package bnode
+package bnode_test
 
 import (
+	"bptree2/bnode"
 	"testing"
 )
 
 func TestLeafNodeBasic(t *testing.T) {
 	data := make([]byte, 4096)
-	leaf := NewLeafNode(data, true)
+	leaf := bnode.NewLeafNode(data, true)
 
-	if leaf.Type() != NodeTypeLeaf {
+	if leaf.Type() != bnode.NodeTypeLeaf {
 		t.Error("expected leaf type")
 	}
 	if leaf.KeyCount() != 0 {
@@ -21,7 +22,7 @@ func TestLeafNodeBasic(t *testing.T) {
 
 func TestLeafNodePutGet(t *testing.T) {
 	data := make([]byte, 4096)
-	leaf := NewLeafNode(data, true)
+	leaf := bnode.NewLeafNode(data, true)
 
 	// Insert keys
 	leaf.Put(10, 100)
@@ -60,7 +61,7 @@ func TestLeafNodePutGet(t *testing.T) {
 
 func TestLeafNodeUpdate(t *testing.T) {
 	data := make([]byte, 4096)
-	leaf := NewLeafNode(data, true)
+	leaf := bnode.NewLeafNode(data, true)
 
 	inserted := leaf.Put(10, 100)
 	if !inserted {
@@ -84,7 +85,7 @@ func TestLeafNodeUpdate(t *testing.T) {
 
 func TestLeafNodeDelete(t *testing.T) {
 	data := make([]byte, 4096)
-	leaf := NewLeafNode(data, true)
+	leaf := bnode.NewLeafNode(data, true)
 
 	leaf.Put(10, 100)
 	leaf.Put(5, 50)
@@ -105,14 +106,14 @@ func TestLeafNodeDelete(t *testing.T) {
 	}
 
 	// Keys should still be sorted
-	if leaf.getKey(0) != 5 || leaf.getKey(1) != 15 {
+	if leaf.GetKey(0) != 5 || leaf.GetKey(1) != 15 {
 		t.Error("keys not in order after delete")
 	}
 }
 
 func TestLeafNodeRange(t *testing.T) {
 	data := make([]byte, 4096)
-	leaf := NewLeafNode(data, true)
+	leaf := bnode.NewLeafNode(data, true)
 
 	for i := uint64(1); i <= 10; i++ {
 		leaf.Put(i*10, i*100)
@@ -134,7 +135,7 @@ func TestLeafNodeRange(t *testing.T) {
 func TestLeafNodeSplit(t *testing.T) {
 	data1 := make([]byte, 4096)
 	data2 := make([]byte, 4096)
-	leaf := NewLeafNode(data1, true)
+	leaf := bnode.NewLeafNode(data1, true)
 
 	// Insert 10 keys
 	for i := uint64(1); i <= 10; i++ {
@@ -150,30 +151,30 @@ func TestLeafNodeSplit(t *testing.T) {
 	}
 
 	// Mid key should be the first key of new node
-	if midKey != newNode.getKey(0) {
-		t.Errorf("midKey %d != first key of new node %d", midKey, newNode.getKey(0))
+	if midKey != newNode.GetKey(0) {
+		t.Errorf("midKey %d != first key of new node %d", midKey, newNode.GetKey(0))
 	}
 
 	// All keys in original should be less than midKey
 	for i := 0; i < leaf.KeyCount(); i++ {
-		if leaf.getKey(i) >= midKey {
-			t.Errorf("original node key %d >= midKey %d", leaf.getKey(i), midKey)
+		if leaf.GetKey(i) >= midKey {
+			t.Errorf("original node key %d >= midKey %d", leaf.GetKey(i), midKey)
 		}
 	}
 
 	// All keys in new node should be >= midKey
 	for i := 0; i < newNode.KeyCount(); i++ {
-		if newNode.getKey(i) < midKey {
-			t.Errorf("new node key %d < midKey %d", newNode.getKey(i), midKey)
+		if newNode.GetKey(i) < midKey {
+			t.Errorf("new node key %d < midKey %d", newNode.GetKey(i), midKey)
 		}
 	}
 }
 
 func TestInternalNodeBasic(t *testing.T) {
 	data := make([]byte, 4096)
-	node := NewInternalNode(data, true)
+	node := bnode.NewInternalNode(data, true)
 
-	if node.Type() != NodeTypeInternal {
+	if node.Type() != bnode.NodeTypeInternal {
 		t.Error("expected internal type")
 	}
 	if node.KeyCount() != 0 {
@@ -183,7 +184,7 @@ func TestInternalNodeBasic(t *testing.T) {
 
 func TestInternalNodeInitRoot(t *testing.T) {
 	data := make([]byte, 4096)
-	node := NewInternalNode(data, true)
+	node := bnode.NewInternalNode(data, true)
 
 	node.InitRoot(1, 2, 100)
 
@@ -196,14 +197,14 @@ func TestInternalNodeInitRoot(t *testing.T) {
 	if node.GetChild(1) != 2 {
 		t.Error("right child should be 2")
 	}
-	if node.getKey(0) != 100 {
+	if node.GetKey(0) != 100 {
 		t.Error("key should be 100")
 	}
 }
 
 func TestInternalNodeSearch(t *testing.T) {
 	data := make([]byte, 4096)
-	node := NewInternalNode(data, true)
+	node := bnode.NewInternalNode(data, true)
 
 	// Build a node with keys [20, 40, 60]
 	// Children: [C0, C1, C2, C3]
@@ -212,14 +213,14 @@ func TestInternalNodeSearch(t *testing.T) {
 	// C2 for keys >= 40 and < 60
 	// C3 for keys >= 60
 
-	node.setChild(0, 10) // page 10
-	node.setKey(0, 20)
-	node.setChild(1, 11) // page 11
-	node.setKey(1, 40)
-	node.setChild(2, 12) // page 12
-	node.setKey(2, 60)
-	node.setChild(3, 13) // page 13
-	setKeyCount(data, 3)
+	node.SetChild(0, 10) // page 10
+	node.SetKey(0, 20)
+	node.SetChild(1, 11) // page 11
+	node.SetKey(1, 40)
+	node.SetChild(2, 12) // page 12
+	node.SetKey(2, 60)
+	node.SetChild(3, 13) // page 13
+	bnode.SetKeyCount(data, 3)
 
 	tests := []struct {
 		key           uint64
@@ -245,7 +246,7 @@ func TestInternalNodeSearch(t *testing.T) {
 
 func TestInternalNodeInsert(t *testing.T) {
 	data := make([]byte, 4096)
-	node := NewInternalNode(data, true)
+	node := bnode.NewInternalNode(data, true)
 
 	node.InitRoot(1, 2, 50)
 
@@ -258,9 +259,9 @@ func TestInternalNodeInsert(t *testing.T) {
 	}
 
 	// Check order: keys should be [30, 50, 70]
-	if node.getKey(0) != 30 || node.getKey(1) != 50 || node.getKey(2) != 70 {
+	if node.GetKey(0) != 30 || node.GetKey(1) != 50 || node.GetKey(2) != 70 {
 		t.Errorf("keys out of order: %d, %d, %d",
-			node.getKey(0), node.getKey(1), node.getKey(2))
+			node.GetKey(0), node.GetKey(1), node.GetKey(2))
 	}
 
 	// Check children: [1, 3, 2, 4]
@@ -273,15 +274,15 @@ func TestInternalNodeInsert(t *testing.T) {
 func TestInternalNodeSplit(t *testing.T) {
 	data1 := make([]byte, 4096)
 	data2 := make([]byte, 4096)
-	node := NewInternalNode(data1, true)
+	node := bnode.NewInternalNode(data1, true)
 
 	// Build a node with many keys
-	node.setChild(0, 100)
+	node.SetChild(0, 100)
 	for i := 0; i < 10; i++ {
-		node.setKey(i, uint64((i+1)*10))
-		node.setChild(i+1, uint64(101+i))
+		node.SetKey(i, uint64((i+1)*10))
+		node.SetChild(i+1, uint64(101+i))
 	}
-	setKeyCount(data1, 10)
+	bnode.SetKeyCount(data1, 10)
 
 	midKey, newNode := node.Split(data2)
 
@@ -293,15 +294,15 @@ func TestInternalNodeSplit(t *testing.T) {
 
 	// All keys in original should be less than midKey
 	for i := 0; i < node.KeyCount(); i++ {
-		if node.getKey(i) >= midKey {
-			t.Errorf("original node key %d >= midKey %d", node.getKey(i), midKey)
+		if node.GetKey(i) >= midKey {
+			t.Errorf("original node key %d >= midKey %d", node.GetKey(i), midKey)
 		}
 	}
 
 	// All keys in new node should be greater than midKey
 	for i := 0; i < newNode.KeyCount(); i++ {
-		if newNode.getKey(i) <= midKey {
-			t.Errorf("new node key %d <= midKey %d", newNode.getKey(i), midKey)
+		if newNode.GetKey(i) <= midKey {
+			t.Errorf("new node key %d <= midKey %d", newNode.GetKey(i), midKey)
 		}
 	}
 }

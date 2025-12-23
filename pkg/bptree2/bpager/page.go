@@ -47,16 +47,16 @@ const MetaPageHeaderSize = 8 + 4 + 4 + 8 + 8 + 8 // 40 bytes
 // Serialize writes the meta page to a byte slice.
 func (m *MetaPage) Serialize(buf []byte) {
 	// Bytes 0-7 are reserved
-	binary.LittleEndian.PutUint32(buf[8:12], m.Magic)
-	binary.LittleEndian.PutUint32(buf[12:16], m.Version)
-	binary.LittleEndian.PutUint64(buf[16:24], m.RootCount)
-	binary.LittleEndian.PutUint64(buf[24:32], m.PageCount)
-	binary.LittleEndian.PutUint64(buf[32:40], m.FreeList)
+	binary.BigEndian.PutUint32(buf[8:12], m.Magic)
+	binary.BigEndian.PutUint32(buf[12:16], m.Version)
+	binary.BigEndian.PutUint64(buf[16:24], m.RootCount)
+	binary.BigEndian.PutUint64(buf[24:32], m.PageCount)
+	binary.BigEndian.PutUint64(buf[32:40], m.FreeList)
 
 	// Serialize RootTable
 	offset := 40
 	for i := 0; i < MaxRoots && offset+8 <= PageSize; i++ {
-		binary.LittleEndian.PutUint64(buf[offset:offset+8], m.RootTable[i])
+		binary.BigEndian.PutUint64(buf[offset:offset+8], m.RootTable[i])
 		offset += 8
 	}
 }
@@ -64,16 +64,16 @@ func (m *MetaPage) Serialize(buf []byte) {
 // Deserialize reads the meta page from a byte slice.
 func (m *MetaPage) Deserialize(buf []byte) {
 	// Bytes 0-7 are reserved
-	m.Magic = binary.LittleEndian.Uint32(buf[8:12])
-	m.Version = binary.LittleEndian.Uint32(buf[12:16])
-	m.RootCount = binary.LittleEndian.Uint64(buf[16:24])
-	m.PageCount = binary.LittleEndian.Uint64(buf[24:32])
-	m.FreeList = binary.LittleEndian.Uint64(buf[32:40])
+	m.Magic = binary.BigEndian.Uint32(buf[8:12])
+	m.Version = binary.BigEndian.Uint32(buf[12:16])
+	m.RootCount = binary.BigEndian.Uint64(buf[16:24])
+	m.PageCount = binary.BigEndian.Uint64(buf[24:32])
+	m.FreeList = binary.BigEndian.Uint64(buf[32:40])
 
 	// Deserialize RootTable
 	offset := 40
 	for i := 0; i < MaxRoots && offset+8 <= PageSize; i++ {
-		m.RootTable[i] = binary.LittleEndian.Uint64(buf[offset : offset+8])
+		m.RootTable[i] = binary.BigEndian.Uint64(buf[offset : offset+8])
 		offset += 8
 	}
 }

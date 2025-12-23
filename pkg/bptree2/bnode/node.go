@@ -57,20 +57,20 @@ func GetNodeType(data []byte) NodeType {
 
 // GetKeyCount returns the number of keys in the node.
 func GetKeyCount(data []byte) uint16 {
-	return binary.LittleEndian.Uint16(data[1:3])
+	return binary.BigEndian.Uint16(data[1:3])
 }
 
 // setKeyCount sets the number of keys in the node.
-func setKeyCount(data []byte, count uint16) {
-	binary.LittleEndian.PutUint16(data[1:3], count)
+func SetKeyCount(data []byte, count uint16) {
+	binary.BigEndian.PutUint16(data[1:3], count)
 }
 
 // getNextLeaf returns the next leaf pointer (only valid for leaf nodes).
 func getNextLeaf(data []byte) uint64 {
-	return binary.LittleEndian.Uint64(data[3:11])
+	return binary.BigEndian.Uint64(data[3:11])
 }
 
 // setNextLeaf sets the next leaf pointer.
 func setNextLeaf(data []byte, next uint64) {
-	binary.LittleEndian.PutUint64(data[3:11], next)
+	binary.BigEndian.PutUint64(data[3:11], next)
 }

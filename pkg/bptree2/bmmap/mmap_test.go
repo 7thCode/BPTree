@@ -1,17 +1,17 @@
-package bmmap
+package bmmap_test
 
 import (
+	"bptree2/bmmap"
 	"os"
 	"path/filepath"
 	"testing"
-
 )
 
 func TestOpenClose(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "test.db")
 
-	m, err := Open(path, 4096)
+	m, err := bmmap.Open(path, 4096)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
@@ -35,7 +35,7 @@ func TestReadWrite(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "test.db")
 
-	m, err := Open(path, 4096)
+	m, err := bmmap.Open(path, 4096)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
@@ -53,7 +53,7 @@ func TestReadWrite(t *testing.T) {
 	}
 
 	// Reopen and verify
-	m2, err := Open(path, 4096)
+	m2, err := bmmap.Open(path, 4096)
 	if err != nil {
 		t.Fatalf("Reopen failed: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestSlice(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "test.db")
 
-	m, err := Open(path, 4096)
+	m, err := bmmap.Open(path, 4096)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
@@ -96,7 +96,7 @@ func TestGrow(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "test.db")
 
-	m, err := Open(path, 4096)
+	m, err := bmmap.Open(path, 4096)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}

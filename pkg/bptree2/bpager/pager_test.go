@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/oda/bptree2/pkg/bptree2/bpager"
+	"bptree2/bpager"
 )
 
 func TestOpenClose(t *testing.T) {

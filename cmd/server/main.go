@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/oda/bptree2/pkg/bptree2"
+	"bptree2"
 )
 
 // Default rootID for single-tree mode (backward compatibility)
@@ -181,11 +181,16 @@ func (s *Server) handleOpen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create default root if needed (for new databases)
-	rootID, err := tree.CreateRoot()
-	if err != nil {
-		// Root might already exist, use default
-		rootID = defaultRootID
+	// Try to use default root, create if it doesn't exist
+	rootID := defaultRootID
+	if tree.RootCount() == 0 {
+		// New database, create first root
+		newRootID, err := tree.CreateRoot()
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, Response{Error: fmt.Sprintf("failed to create root: %v", err)})
+			return
+		}
+		rootID = newRootID
 	}
 
 	s.tree = tree
@@ -290,6 +295,12 @@ func (s *Server) handleInsert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Auto-checkpoint to ensure data is persisted
+	if err := s.tree.Checkpoint(); err != nil {
+		writeJSON(w, http.StatusInternalServerError, Response{Error: fmt.Sprintf("checkpoint failed: %v", err)})
+		return
+	}
+
 	writeJSON(w, http.StatusOK, Response{
 		Success: true,
 		Data:    KeyValue{Key: req.Key, Value: req.Value},
@@ -323,6 +334,15 @@ func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	deleted := s.tree.Delete(s.rootID, key)
+
+	// Auto-checkpoint to ensure data is persisted
+	if deleted {
+		if err := s.tree.Checkpoint(); err != nil {
+			writeJSON(w, http.StatusInternalServerError, Response{Error: fmt.Sprintf("checkpoint failed: %v", err)})
+			return
+		}
+	}
+
 	writeJSON(w, http.StatusOK, Response{
 		Success: true,
 		Data:    map[string]bool{"deleted": deleted},

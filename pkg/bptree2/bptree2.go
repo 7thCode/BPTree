@@ -28,8 +28,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/oda/bptree2/pkg/bptree2/bnode"
-	"github.com/oda/bptree2/pkg/bptree2/bpager"
+	"bptree2/bnode"
+	"bptree2/bpager"
 )
 
 // RootID is the identifier for a root tree.

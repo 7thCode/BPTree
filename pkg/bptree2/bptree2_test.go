@@ -1,6 +1,7 @@
-package bptree2
+package bptree2_test
 
 import (
+	"bptree2"
 	"math/rand"
 	"path/filepath"
 	"sync"
@@ -11,7 +12,7 @@ func TestBasicOperations(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "test.db")
 
-	tree, err := Open(path)
+	tree, err := bptree2.Open(path)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
@@ -63,7 +64,7 @@ func TestLargeInsert(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "test.db")
 
-	tree, err := Open(path)
+	tree, err := bptree2.Open(path)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
@@ -105,7 +106,7 @@ func TestMillionInsert(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "test.db")
 
-	tree, err := Open(path)
+	tree, err := bptree2.Open(path)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
@@ -137,7 +138,7 @@ func TestRandomInsert(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "test.db")
 
-	tree, err := Open(path)
+	tree, err := bptree2.Open(path)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
@@ -175,7 +176,7 @@ func TestRangeScan(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "test.db")
 
-	tree, err := Open(path)
+	tree, err := bptree2.Open(path)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
@@ -217,7 +218,7 @@ func TestFindRangeEarlyStop(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "test.db")
 
-	tree, err := Open(path)
+	tree, err := bptree2.Open(path)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
@@ -245,7 +246,7 @@ func TestPersistence(t *testing.T) {
 	path := filepath.Join(tmpDir, "test.db")
 
 	// Create and populate
-	tree1, err := Open(path)
+	tree1, err := bptree2.Open(path)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
@@ -258,7 +259,7 @@ func TestPersistence(t *testing.T) {
 	tree1.Close()
 
 	// Reopen and verify
-	tree2, err := Open(path)
+	tree2, err := bptree2.Open(path)
 	if err != nil {
 		t.Fatalf("Reopen failed: %v", err)
 	}
@@ -280,7 +281,7 @@ func TestDelete(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "test.db")
 
-	tree, err := Open(path)
+	tree, err := bptree2.Open(path)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
@@ -322,7 +323,7 @@ func TestLargeDelete(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "test.db")
 
-	tree, err := Open(path)
+	tree, err := bptree2.Open(path)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
@@ -361,7 +362,7 @@ func TestDeleteWithPageReuse(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "test.db")
 
-	tree, err := Open(path)
+	tree, err := bptree2.Open(path)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
@@ -401,7 +402,7 @@ func TestDeleteReverseOrder(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "test.db")
 
-	tree, err := Open(path)
+	tree, err := bptree2.Open(path)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
@@ -432,7 +433,7 @@ func TestConcurrentReads(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "test.db")
 
-	tree, err := Open(path)
+	tree, err := bptree2.Open(path)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
@@ -477,7 +478,7 @@ func TestEmptyTree(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "test.db")
 
-	tree, err := Open(path)
+	tree, err := bptree2.Open(path)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
@@ -516,7 +517,7 @@ func TestMultipleRoots(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "test.db")
 
-	tree, err := Open(path)
+	tree, err := bptree2.Open(path)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
@@ -574,7 +575,7 @@ func TestMultipleRootsPersistence(t *testing.T) {
 	path := filepath.Join(tmpDir, "test.db")
 
 	// Create and populate
-	tree1, _ := Open(path)
+	tree1, _ := bptree2.Open(path)
 	root1, _ := tree1.CreateRoot()
 	root2, _ := tree1.CreateRoot()
 
@@ -586,7 +587,7 @@ func TestMultipleRootsPersistence(t *testing.T) {
 	tree1.Close()
 
 	// Reopen and verify
-	tree2, _ := Open(path)
+	tree2, _ := bptree2.Open(path)
 	defer tree2.Close()
 
 	for i := 0; i < 100; i++ {
@@ -606,7 +607,7 @@ func BenchmarkInsert(b *testing.B) {
 	tmpDir := b.TempDir()
 	path := filepath.Join(tmpDir, "bench.db")
 
-	tree, _ := Open(path)
+	tree, _ := bptree2.Open(path)
 	defer tree.Close()
 
 	rootID, _ := tree.CreateRoot()
@@ -621,7 +622,7 @@ func BenchmarkFind(b *testing.B) {
 	tmpDir := b.TempDir()
 	path := filepath.Join(tmpDir, "bench.db")
 
-	tree, _ := Open(path)
+	tree, _ := bptree2.Open(path)
 	defer tree.Close()
 
 	rootID, _ := tree.CreateRoot()
@@ -641,7 +642,7 @@ func BenchmarkFindRange(b *testing.B) {
 	tmpDir := b.TempDir()
 	path := filepath.Join(tmpDir, "bench.db")
 
-	tree, _ := Open(path)
+	tree, _ := bptree2.Open(path)
 	defer tree.Close()
 
 	rootID, _ := tree.CreateRoot()

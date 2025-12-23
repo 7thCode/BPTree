@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/oda/bptree2/pkg/bptree2/bmmap"
+	"bptree2/bmmap"
 )
 
 const (
@@ -111,7 +111,7 @@ func (p *Pager) AllocatePage() (PageID, error) {
 
 		// Get the next free page from the freed page's header
 		data := p.mmap.Slice(int64(pageID)*PageSize, PageSize)
-		nextFree := binary.LittleEndian.Uint64(data[0:8])
+		nextFree := binary.BigEndian.Uint64(data[0:8])
 
 		p.meta.FreeList = nextFree
 		p.writeMeta()
@@ -249,7 +249,7 @@ func (p *Pager) FreePage(id PageID) error {
 	for i := range data {
 		data[i] = 0
 	}
-	binary.LittleEndian.PutUint64(data[0:8], p.meta.FreeList)
+	binary.BigEndian.PutUint64(data[0:8], p.meta.FreeList)
 
 	// Update free list head
 	p.meta.FreeList = id
