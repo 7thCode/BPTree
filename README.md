@@ -6,7 +6,7 @@ MMAP-based B+Tree library for Go with uint64 keys and values.
 
 - **Memory-mapped I/O** for efficient page access
 - **Concurrent reads** supported
-- **Checkpoint-based persistence** for durability
+- **Flash-based persistence** for durability
 - **Range scans** with callback API
 
 ## Installation
@@ -53,7 +53,7 @@ func main() {
     })
 
     // Persist to disk
-    tree.Checkpoint()
+    tree.Flash()
 
     // Delete a key
     tree.Delete(2)
@@ -70,7 +70,7 @@ func main() {
 | `Put(key, value uint64) error`       | Insert or update             |
 | `Delete(key uint64) bool`            | Delete a key                 |
 | `Scan(start, end uint64, fn) error`  | Range scan with callback     |
-| `Checkpoint() error`                 | Sync changes to disk         |
+| `Flash() error`                 | Sync changes to disk         |
 | `Count() int`                        | Count all entries (O(n))     |
 
 ## Architecture

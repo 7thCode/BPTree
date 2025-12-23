@@ -84,9 +84,9 @@ func TestGetPage(t *testing.T) {
 	// Write to page
 	copy(page[0:5], []byte("hello"))
 
-	// Checkpoint
-	if err := p.Checkpoint(); err != nil {
-		t.Fatalf("Checkpoint failed: %v", err)
+	// Flash
+	if err := p.Flash(); err != nil {
+		t.Fatalf("Flash failed: %v", err)
 	}
 }
 
@@ -107,7 +107,7 @@ func TestPersistence(t *testing.T) {
 	// Use rootID 0
 	var rootID uint64 = 0
 	p1.SetRootPage(rootID, id)
-	p1.Checkpoint()
+	p1.Flash()
 	p1.Close()
 
 	// Reopen and verify

@@ -255,7 +255,7 @@ func TestPersistence(t *testing.T) {
 	for i := 0; i < 1000; i++ {
 		tree1.Insert(rootID, uint64(i), uint64(i*10))
 	}
-	tree1.Checkpoint()
+	tree1.Flash()
 	tree1.Close()
 
 	// Reopen and verify
@@ -583,7 +583,7 @@ func TestMultipleRootsPersistence(t *testing.T) {
 		tree1.Insert(root1, uint64(i), uint64(i*10))
 		tree1.Insert(root2, uint64(i), uint64(i*100))
 	}
-	tree1.Checkpoint()
+	tree1.Flash()
 	tree1.Close()
 
 	// Reopen and verify

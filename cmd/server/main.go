@@ -115,7 +115,7 @@ func main() {
 	http.HandleFunc("/api/insert", corsHandler(server.handleInsert))
 	http.HandleFunc("/api/delete", corsHandler(server.handleDelete))
 	http.HandleFunc("/api/findrange", corsHandler(server.handleFindRange))
-	http.HandleFunc("/api/checkpoint", corsHandler(server.handleCheckpoint))
+	http.HandleFunc("/api/flash", corsHandler(server.handleFlash))
 	http.HandleFunc("/api/count", corsHandler(server.handleCount))
 	http.HandleFunc("/api/benchmark", corsHandler(server.handleBenchmark))
 
@@ -295,9 +295,9 @@ func (s *Server) handleInsert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Auto-checkpoint to ensure data is persisted
-	if err := s.tree.Checkpoint(); err != nil {
-		writeJSON(w, http.StatusInternalServerError, Response{Error: fmt.Sprintf("checkpoint failed: %v", err)})
+	// Auto-flash to ensure data is persisted
+	if err := s.tree.Flash(); err != nil {
+		writeJSON(w, http.StatusInternalServerError, Response{Error: fmt.Sprintf("flash failed: %v", err)})
 		return
 	}
 
@@ -335,10 +335,10 @@ func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
 
 	deleted := s.tree.Delete(s.rootID, key)
 
-	// Auto-checkpoint to ensure data is persisted
+	// Auto-flash to ensure data is persisted
 	if deleted {
-		if err := s.tree.Checkpoint(); err != nil {
-			writeJSON(w, http.StatusInternalServerError, Response{Error: fmt.Sprintf("checkpoint failed: %v", err)})
+		if err := s.tree.Flash(); err != nil {
+			writeJSON(w, http.StatusInternalServerError, Response{Error: fmt.Sprintf("flash failed: %v", err)})
 			return
 		}
 	}
@@ -400,7 +400,7 @@ func (s *Server) handleFindRange(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) handleCheckpoint(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleFlash(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, Response{Error: "method not allowed"})
 		return
@@ -414,8 +414,8 @@ func (s *Server) handleCheckpoint(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.tree.Checkpoint(); err != nil {
-		writeJSON(w, http.StatusInternalServerError, Response{Error: fmt.Sprintf("checkpoint failed: %v", err)})
+	if err := s.tree.Flash(); err != nil {
+		writeJSON(w, http.StatusInternalServerError, Response{Error: fmt.Sprintf("flash failed: %v", err)})
 		return
 	}
 

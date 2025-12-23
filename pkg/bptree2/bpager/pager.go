@@ -3,7 +3,6 @@ package bpager
 import (
 	"encoding/binary"
 	"fmt"
-	"sync"
 
 	"bptree2/bmmap"
 )
@@ -23,7 +22,7 @@ const (
 type Pager struct {
 	mmap *bmmap.MMap
 	meta *MetaPage
-	mu   sync.RWMutex // Protects meta and page allocation
+	// mu   sync.RWMutex // Protects meta and page allocation
 }
 
 // Open opens or creates a database file.
@@ -84,8 +83,8 @@ func (p *Pager) writeMeta() {
 
 // Close closes the pager and underlying file.
 func (p *Pager) Close() error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	//	p.mu.Lock()
+	//	defer p.mu.Unlock()
 
 	return p.mmap.Close()
 }
@@ -93,8 +92,8 @@ func (p *Pager) Close() error {
 // GetPage returns a byte slice for the given page ID.
 // The returned slice is only valid until Close or Grow is called.
 func (p *Pager) GetPage(id PageID) []byte {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
+	//	p.mu.RLock()
+	//	defer p.mu.RUnlock()
 
 	offset := int64(id) * PageSize
 	return p.mmap.Slice(offset, PageSize)
@@ -102,8 +101,8 @@ func (p *Pager) GetPage(id PageID) []byte {
 
 // AllocatePage allocates a new page and returns its ID.
 func (p *Pager) AllocatePage() (PageID, error) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	//	p.mu.Lock()
+	//	defer p.mu.Unlock()
 
 	// Check free list first
 	if p.meta.FreeList != 0 {
@@ -148,8 +147,8 @@ func (p *Pager) AllocatePage() (PageID, error) {
 // GetRootPage returns the root page ID for a given rootID.
 // Returns 0 if the rootID is invalid or the tree doesn't exist.
 func (p *Pager) GetRootPage(rootID RootID) PageID {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
+	//	p.mu.RLock()
+	//	defer p.mu.RUnlock()
 	page := p.meta.GetRootPage(rootID)
 	// Reserved marker means empty tree
 	if page == ReservedMarker {
@@ -160,8 +159,8 @@ func (p *Pager) GetRootPage(rootID RootID) PageID {
 
 // SetRootPage sets the root page ID for a given rootID.
 func (p *Pager) SetRootPage(rootID RootID, pageID PageID) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	//	p.mu.Lock()
+	//	defer p.mu.Unlock()
 
 	if !p.meta.SetRootPage(rootID, pageID) {
 		return fmt.Errorf("invalid rootID: %d (max: %d)", rootID, MaxRoots-1)
@@ -173,8 +172,8 @@ func (p *Pager) SetRootPage(rootID RootID, pageID PageID) error {
 // CreateRoot creates a new root and returns its ID.
 // Returns error if maximum roots reached.
 func (p *Pager) CreateRoot() (RootID, error) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	//	p.mu.Lock()
+	//	defer p.mu.Unlock()
 
 	// Find first available slot (0 means unused)
 	for i := RootID(0); i < MaxRoots; i++ {
@@ -193,8 +192,8 @@ func (p *Pager) CreateRoot() (RootID, error) {
 // DeleteRoot deletes a root tree.
 // Note: This only removes the root reference, does not free pages.
 func (p *Pager) DeleteRoot(rootID RootID) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	//	p.mu.Lock()
+	//	defer p.mu.Unlock()
 
 	if rootID >= MaxRoots {
 		return fmt.Errorf("invalid rootID: %d", rootID)
@@ -213,22 +212,22 @@ func (p *Pager) DeleteRoot(rootID RootID) error {
 
 // RootCount returns the number of active roots.
 func (p *Pager) RootCount() uint64 {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
+	//	p.mu.RLock()
+	//	defer p.mu.RUnlock()
 	return p.meta.RootCount
 }
 
 // PageCount returns the total number of allocated pages.
 func (p *Pager) PageCount() uint64 {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
+	//	p.mu.RLock()
+	//	defer p.mu.RUnlock()
 	return p.meta.PageCount
 }
 
-// Checkpoint syncs all changes to disk.
-func (p *Pager) Checkpoint() error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+// Flash syncs all changes to disk.
+func (p *Pager) Flash() error {
+	//p.mu.Lock()
+	//defer p.mu.Unlock()
 
 	p.writeMeta()
 	return p.mmap.Sync()
@@ -236,8 +235,8 @@ func (p *Pager) Checkpoint() error {
 
 // FreePage adds a page to the free list.
 func (p *Pager) FreePage(id PageID) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	//	p.mu.Lock()
+	//	defer p.mu.Unlock()
 
 	// Store the current free list head in this page
 	data := p.mmap.Slice(int64(id)*PageSize, PageSize)

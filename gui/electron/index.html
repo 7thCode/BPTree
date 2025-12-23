@@ -1,172 +1,147 @@
 <!DOCTYPE html>
 <html lang="ja">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>BPTree GUI</title>
-    <link rel="stylesheet" href="styles.css" />
-  </head>
-  <body>
-    <div class="app-container">
-      <!-- Header -->
-      <header class="app-header">
-        <div class="logo">
-          <span class="logo-icon">🌲</span>
-          <h1>BPTree <span class="highlight">GUI</span></h1>
-        </div>
-        <div class="connection-status" id="connectionStatus">
-          <span class="status-dot disconnected"></span>
-          <span class="status-text">Disconnected</span>
-        </div>
-      </header>
 
-      <!-- Main Content -->
-      <main class="main-content">
-        <!-- Left Panel: Database & Operations -->
-        <aside class="left-panel">
-          <!-- Database Section -->
-          <section class="panel database-panel">
-            <h2 class="panel-title">📁 Database</h2>
-            <div class="form-group">
-              <label for="dbPath">File Path</label>
-              <input
-                type="text"
-                id="dbPath"
-                placeholder="./data.db"
-                value="./data.db"
-              />
-            </div>
-            <div class="button-group">
-              <button id="btnOpen" class="btn btn-primary">Open</button>
-              <button id="btnClose" class="btn btn-secondary" disabled>
-                Close
-              </button>
-            </div>
-          </section>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BPTree GUI</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
 
-          <!-- Operations Section -->
-          <section class="panel operations-panel">
-            <h2 class="panel-title">⚡ Operations</h2>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="logo">
+        <span class="logo-icon">🌲</span>
+        <h1>BPTree <span class="highlight">GUI</span></h1>
+      </div>
+      <div class="connection-status" id="connectionStatus">
+        <span class="status-dot disconnected"></span>
+        <span class="status-text">Disconnected</span>
+      </div>
+    </header>
 
-            <!-- Put Operation -->
-            <div class="operation-card">
-              <h3>Put</h3>
-              <div class="form-row">
-                <input type="number" id="putKey" placeholder="Key" min="0" />
-                <input
-                  type="number"
-                  id="putValue"
-                  placeholder="Value"
-                  min="0"
-                />
-              </div>
-              <button id="btnPut" class="btn btn-accent" disabled>Put</button>
-            </div>
-
-            <!-- Get Operation -->
-            <div class="operation-card">
-              <h3>Get</h3>
-              <div class="form-row">
-                <input type="number" id="getKey" placeholder="Key" min="0" />
-              </div>
-              <button id="btnGet" class="btn btn-info" disabled>Get</button>
-            </div>
-
-            <!-- Delete Operation -->
-            <div class="operation-card">
-              <h3>Delete</h3>
-              <div class="form-row">
-                <input type="number" id="deleteKey" placeholder="Key" min="0" />
-              </div>
-              <button id="btnDelete" class="btn btn-danger" disabled>
-                Delete
-              </button>
-            </div>
-
-            <!-- Scan Operation -->
-            <div class="operation-card">
-              <h3>Scan</h3>
-              <div class="form-row">
-                <input
-                  type="number"
-                  id="scanStart"
-                  placeholder="Start"
-                  min="0"
-                />
-                <input type="number" id="scanEnd" placeholder="End" min="0" />
-              </div>
-              <button id="btnScan" class="btn btn-info" disabled>Scan</button>
-            </div>
-          </section>
-
-          <!-- Actions Section -->
-          <section class="panel actions-panel">
-            <h2 class="panel-title">🔧 Actions</h2>
-            <div class="button-group vertical">
-              <button id="btnCheckpoint" class="btn btn-success" disabled>
-                💾 Checkpoint
-              </button>
-              <button id="btnClear" class="btn btn-secondary">
-                🗑️ Clear Log
-              </button>
-            </div>
-          </section>
-
-          <!-- Benchmark Section -->
-          <section class="panel benchmark-panel">
-            <h2 class="panel-title">📊 Benchmark</h2>
-            <div class="form-group">
-              <label for="benchCount">Number of Operations</label>
-              <input
-                type="number"
-                id="benchCount"
-                placeholder="10000"
-                value="10000"
-                min="100"
-                max="1000000"
-              />
-            </div>
-            <div class="form-group">
-              <label for="benchKeyRange">Key Range (max value)</label>
-              <input
-                type="number"
-                id="benchKeyRange"
-                placeholder="1000000"
-                value="1000000"
-                min="1000"
-              />
-            </div>
-            <button id="btnBenchmark" class="btn btn-benchmark" disabled>
-              🚀 Run Benchmark
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Left Panel: Database & Operations -->
+      <aside class="left-panel">
+        <!-- Database Section -->
+        <section class="panel database-panel">
+          <h2 class="panel-title">📁 Database</h2>
+          <div class="form-group">
+            <label for="dbPath">File Path</label>
+            <input type="text" id="dbPath" placeholder="./data.db" value="./data.db" />
+          </div>
+          <div class="button-group">
+            <button id="btnOpen" class="btn btn-primary">Open</button>
+            <button id="btnClose" class="btn btn-secondary" disabled>
+              Close
             </button>
-          </section>
-        </aside>
-
-        <!-- Right Panel: Results -->
-        <section class="right-panel">
-          <div class="panel results-panel">
-            <h2 class="panel-title">📋 Results</h2>
-            <div class="results-container" id="results">
-              <div class="welcome-message">
-                <p>Welcome to BPTree GUI!</p>
-                <p>Open a database to start testing.</p>
-              </div>
-            </div>
           </div>
         </section>
-      </main>
 
-      <!-- Footer / Status Bar -->
-      <footer class="app-footer">
-        <div class="stats">
-          <span id="entryCount">Entries: -</span>
-          <span class="separator">|</span>
-          <span id="dbPathDisplay">Path: Not connected</span>
+        <!-- Operations Section -->
+        <section class="panel operations-panel">
+          <h2 class="panel-title">⚡ Operations</h2>
+
+          <!-- Put Operation -->
+          <div class="operation-card">
+            <h3>Put</h3>
+            <div class="form-row">
+              <input type="number" id="putKey" placeholder="Key" min="0" />
+              <input type="number" id="putValue" placeholder="Value" min="0" />
+            </div>
+            <button id="btnPut" class="btn btn-accent" disabled>Put</button>
+          </div>
+
+          <!-- Get Operation -->
+          <div class="operation-card">
+            <h3>Get</h3>
+            <div class="form-row">
+              <input type="number" id="getKey" placeholder="Key" min="0" />
+            </div>
+            <button id="btnGet" class="btn btn-info" disabled>Get</button>
+          </div>
+
+          <!-- Delete Operation -->
+          <div class="operation-card">
+            <h3>Delete</h3>
+            <div class="form-row">
+              <input type="number" id="deleteKey" placeholder="Key" min="0" />
+            </div>
+            <button id="btnDelete" class="btn btn-danger" disabled>
+              Delete
+            </button>
+          </div>
+
+          <!-- Scan Operation -->
+          <div class="operation-card">
+            <h3>Scan</h3>
+            <div class="form-row">
+              <input type="number" id="scanStart" placeholder="Start" min="0" />
+              <input type="number" id="scanEnd" placeholder="End" min="0" />
+            </div>
+            <button id="btnScan" class="btn btn-info" disabled>Scan</button>
+          </div>
+        </section>
+
+        <!-- Actions Section -->
+        <section class="panel actions-panel">
+          <h2 class="panel-title">🔧 Actions</h2>
+          <div class="button-group vertical">
+            <button id="btnFlash" class="btn btn-success" disabled>
+              💾 Flash
+            </button>
+            <button id="btnClear" class="btn btn-secondary">
+              🗑️ Clear Log
+            </button>
+          </div>
+        </section>
+
+        <!-- Benchmark Section -->
+        <section class="panel benchmark-panel">
+          <h2 class="panel-title">📊 Benchmark</h2>
+          <div class="form-group">
+            <label for="benchCount">Number of Operations</label>
+            <input type="number" id="benchCount" placeholder="10000" value="10000" min="100" max="1000000" />
+          </div>
+          <div class="form-group">
+            <label for="benchKeyRange">Key Range (max value)</label>
+            <input type="number" id="benchKeyRange" placeholder="1000000" value="1000000" min="1000" />
+          </div>
+          <button id="btnBenchmark" class="btn btn-benchmark" disabled>
+            🚀 Run Benchmark
+          </button>
+        </section>
+      </aside>
+
+      <!-- Right Panel: Results -->
+      <section class="right-panel">
+        <div class="panel results-panel">
+          <h2 class="panel-title">📋 Results</h2>
+          <div class="results-container" id="results">
+            <div class="welcome-message">
+              <p>Welcome to BPTree GUI!</p>
+              <p>Open a database to start testing.</p>
+            </div>
+          </div>
         </div>
-        <div class="api-info">API: http://localhost:8080</div>
-      </footer>
-    </div>
+      </section>
+    </main>
 
-    <script src="renderer.js"></script>
-  </body>
+    <!-- Footer / Status Bar -->
+    <footer class="app-footer">
+      <div class="stats">
+        <span id="entryCount">Entries: -</span>
+        <span class="separator">|</span>
+        <span id="dbPathDisplay">Path: Not connected</span>
+      </div>
+      <div class="api-info">API: http://localhost:8080</div>
+    </footer>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+
 </html>

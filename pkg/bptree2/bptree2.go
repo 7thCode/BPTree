@@ -1,7 +1,7 @@
 // Package bptree provides a B+Tree implementation using memory-mapped files.
 //
 // The tree stores uint64 keys and uint64 values, optimized for concurrent reads.
-// Changes are persisted to disk via checkpoint operations.
+// Changes are persisted to disk via flash operations.
 // Supports multiple root trees identified by rootID.
 //
 // Example:
@@ -21,12 +21,11 @@
 //	    fmt.Println(val) // 100
 //	}
 //
-//	tree.Checkpoint() // Sync to disk
+//	tree.Flash() // Sync to disk
 package bptree2
 
 import (
 	"fmt"
-	"sync"
 
 	"bptree2/bnode"
 	"bptree2/bpager"
@@ -39,7 +38,7 @@ type RootID = bpager.RootID
 // Supports multiple root trees.
 type BPTree struct {
 	pager *bpager.Pager
-	mu    sync.RWMutex // Protects writes, allows concurrent reads
+	// mu    sync.RWMutex // Protects writes, allows concurrent reads
 }
 
 // Open opens or creates a B+Tree file.
@@ -54,18 +53,18 @@ func Open(path string) (*BPTree, error) {
 	}, nil
 }
 
-// Checkpoint syncs all changes to disk.
-func (t *BPTree) Checkpoint() error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return t.pager.Checkpoint()
+// Flash syncs all changes to disk.
+func (t *BPTree) Flash() error {
+	//	t.mu.Lock()
+	//	defer t.mu.Unlock()
+	return t.pager.Flash()
 }
 
 // Count returns the number of key-value pairs in a tree.
 // This is an O(n) operation.
 func (t *BPTree) Count(rootID RootID) int {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
+	//	t.mu.RLock()
+	//	defer t.mu.RUnlock()
 
 	count := 0
 	t.scanInternal(rootID, 0, ^uint64(0), func(key, value uint64) bool {
@@ -82,31 +81,31 @@ func (t *BPTree) Close() error {
 
 // CreateRoot creates a new root tree and returns its ID.
 func (t *BPTree) CreateRoot() (RootID, error) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	//	t.mu.Lock()
+	//	defer t.mu.Unlock()
 	return t.pager.CreateRoot()
 }
 
 // DeleteRoot deletes a root tree.
 // Note: This only removes the root reference.
 func (t *BPTree) DeleteRoot(rootID RootID) error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	//	t.mu.Lock()
+	//	defer t.mu.Unlock()
 	return t.pager.DeleteRoot(rootID)
 }
 
 // RootCount returns the number of active root trees.
 func (t *BPTree) RootCount() uint64 {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
+	//	t.mu.RLock()
+	//	defer t.mu.RUnlock()
 	return t.pager.RootCount()
 }
 
 // Find retrieves a value by key from a specific root tree.
 // Returns (value, true) if found, (0, false) otherwise.
 func (t *BPTree) Find(rootID RootID, key uint64) (uint64, bool) {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
+	//	t.mu.RLock()
+	//	defer t.mu.RUnlock()
 
 	rootPageID := t.pager.GetRootPage(rootID)
 	if rootPageID == 0 {
@@ -119,16 +118,16 @@ func (t *BPTree) Find(rootID RootID, key uint64) (uint64, bool) {
 // FindRange iterates over all key-value pairs where start <= key <= end.
 // The callback function is called for each pair. Return false to stop iteration.
 func (t *BPTree) FindRange(rootID RootID, start, end uint64, fn func(key, value uint64) bool) error {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
+	//	t.mu.RLock()
+	//	defer t.mu.RUnlock()
 
 	return t.scanInternal(rootID, start, end, fn)
 }
 
 // Insert inserts or updates a key-value pair in a specific root tree.
 func (t *BPTree) Insert(rootID RootID, key, value uint64) error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	//	t.mu.Lock()
+	//	defer t.mu.Unlock()
 
 	rootPageID := t.pager.GetRootPage(rootID)
 
@@ -173,8 +172,8 @@ func (t *BPTree) Insert(rootID RootID, key, value uint64) error {
 // Delete removes a key from a specific root tree.
 // Returns true if the key was found and removed.
 func (t *BPTree) Delete(rootID RootID, key uint64) bool {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	//	t.mu.Lock()
+	//	defer t.mu.Unlock()
 
 	rootPageID := t.pager.GetRootPage(rootID)
 	if rootPageID == 0 {
