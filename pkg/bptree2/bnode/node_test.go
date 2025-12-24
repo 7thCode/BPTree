@@ -24,37 +24,40 @@ func TestLeafNodePutGet(t *testing.T) {
 	data := make([]byte, 4096)
 	leaf := bnode.NewLeafNode(data, true)
 
-	// Insert keys
-	leaf.Put(10, 100)
-	leaf.Put(5, 50)
-	leaf.Put(15, 150)
-	leaf.Put(7, 70)
+	// Insert keys with composite key (key1, key2, value)
+	leaf.Put(10, 100, 1000)
+	leaf.Put(5, 50, 500)
+	leaf.Put(15, 150, 1500)
+	leaf.Put(7, 70, 700)
 
 	if leaf.KeyCount() != 4 {
 		t.Errorf("expected 4 keys, got %d", leaf.KeyCount())
 	}
 
-	// Get keys
+	// Get keys - must match both key1 AND key2
 	tests := []struct {
-		key      uint64
+		key1     uint64
+		key2     uint64
 		expected uint64
 		found    bool
 	}{
-		{5, 50, true},
-		{7, 70, true},
-		{10, 100, true},
-		{15, 150, true},
-		{1, 0, false},
-		{20, 0, false},
+		{5, 50, 500, true},
+		{7, 70, 700, true},
+		{10, 100, 1000, true},
+		{15, 150, 1500, true},
+		{1, 10, 0, false},   // not found
+		{20, 200, 0, false}, // not found
+		{10, 99, 0, false},  // key1 matches but key2 doesn't (AND condition)
+		{99, 100, 0, false}, // key2 matches but key1 doesn't (AND condition)
 	}
 
 	for _, tt := range tests {
-		val, found := leaf.Get(tt.key)
+		val, found := leaf.Get(tt.key1, tt.key2)
 		if found != tt.found {
-			t.Errorf("key %d: expected found=%v, got %v", tt.key, tt.found, found)
+			t.Errorf("key (%d, %d): expected found=%v, got %v", tt.key1, tt.key2, tt.found, found)
 		}
 		if found && val != tt.expected {
-			t.Errorf("key %d: expected value %d, got %d", tt.key, tt.expected, val)
+			t.Errorf("key (%d, %d): expected value %d, got %d", tt.key1, tt.key2, tt.expected, val)
 		}
 	}
 }
@@ -63,19 +66,19 @@ func TestLeafNodeUpdate(t *testing.T) {
 	data := make([]byte, 4096)
 	leaf := bnode.NewLeafNode(data, true)
 
-	inserted := leaf.Put(10, 100)
+	inserted := leaf.Put(10, 100, 1000)
 	if !inserted {
 		t.Error("expected insert")
 	}
 
-	inserted = leaf.Put(10, 200)
+	inserted = leaf.Put(10, 100, 2000)
 	if inserted {
 		t.Error("expected update, not insert")
 	}
 
-	val, _ := leaf.Get(10)
-	if val != 200 {
-		t.Errorf("expected 200, got %d", val)
+	val, _ := leaf.Get(10, 100)
+	if val != 2000 {
+		t.Errorf("expected 2000, got %d", val)
 	}
 
 	if leaf.KeyCount() != 1 {
@@ -87,16 +90,16 @@ func TestLeafNodeDelete(t *testing.T) {
 	data := make([]byte, 4096)
 	leaf := bnode.NewLeafNode(data, true)
 
-	leaf.Put(10, 100)
-	leaf.Put(5, 50)
-	leaf.Put(15, 150)
+	leaf.Put(10, 100, 1000)
+	leaf.Put(5, 50, 500)
+	leaf.Put(15, 150, 1500)
 
-	deleted := leaf.Delete(10)
+	deleted := leaf.Delete(10, 100)
 	if !deleted {
 		t.Error("expected delete to succeed")
 	}
 
-	_, found := leaf.Get(10)
+	_, found := leaf.Get(10, 100)
 	if found {
 		t.Error("key should not exist after delete")
 	}
@@ -106,7 +109,7 @@ func TestLeafNodeDelete(t *testing.T) {
 	}
 
 	// Keys should still be sorted
-	if leaf.GetKey(0) != 5 || leaf.GetKey(1) != 15 {
+	if leaf.GetKey1(0) != 5 || leaf.GetKey1(1) != 15 {
 		t.Error("keys not in order after delete")
 	}
 }
@@ -116,18 +119,18 @@ func TestLeafNodeRange(t *testing.T) {
 	leaf := bnode.NewLeafNode(data, true)
 
 	for i := uint64(1); i <= 10; i++ {
-		leaf.Put(i*10, i*100)
+		leaf.Put(i*10, i*10, i*100)
 	}
 
-	results := leaf.Range(30, 70)
+	results := leaf.Range(30, 30, 70, 70)
 	if len(results) != 5 { // 30, 40, 50, 60, 70
 		t.Errorf("expected 5 results, got %d", len(results))
 	}
 
 	expected := []uint64{30, 40, 50, 60, 70}
 	for i, r := range results {
-		if r.Key != expected[i] {
-			t.Errorf("result %d: expected key %d, got %d", i, expected[i], r.Key)
+		if r.Key1 != expected[i] {
+			t.Errorf("result %d: expected key1 %d, got %d", i, expected[i], r.Key1)
 		}
 	}
 }
@@ -139,7 +142,7 @@ func TestLeafNodeSplit(t *testing.T) {
 
 	// Insert 10 keys
 	for i := uint64(1); i <= 10; i++ {
-		leaf.Put(i, i*10)
+		leaf.Put(i, i*2, i*10)
 	}
 
 	midKey, newNode := leaf.Split(data2)
@@ -150,22 +153,22 @@ func TestLeafNodeSplit(t *testing.T) {
 			leaf.KeyCount(), newNode.KeyCount())
 	}
 
-	// Mid key should be the first key of new node
-	if midKey != newNode.GetKey(0) {
-		t.Errorf("midKey %d != first key of new node %d", midKey, newNode.GetKey(0))
+	// Mid key should be the first key1 of new node
+	if midKey != newNode.GetKey1(0) {
+		t.Errorf("midKey %d != first key1 of new node %d", midKey, newNode.GetKey1(0))
 	}
 
-	// All keys in original should be less than midKey
+	// All key1s in original should be less than midKey
 	for i := 0; i < leaf.KeyCount(); i++ {
-		if leaf.GetKey(i) >= midKey {
-			t.Errorf("original node key %d >= midKey %d", leaf.GetKey(i), midKey)
+		if leaf.GetKey1(i) >= midKey {
+			t.Errorf("original node key1 %d >= midKey %d", leaf.GetKey1(i), midKey)
 		}
 	}
 
-	// All keys in new node should be >= midKey
+	// All key1s in new node should be >= midKey
 	for i := 0; i < newNode.KeyCount(); i++ {
-		if newNode.GetKey(i) < midKey {
-			t.Errorf("new node key %d < midKey %d", newNode.GetKey(i), midKey)
+		if newNode.GetKey1(i) < midKey {
+			t.Errorf("new node key1 %d < midKey %d", newNode.GetKey1(i), midKey)
 		}
 	}
 }

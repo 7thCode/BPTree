@@ -1,6 +1,6 @@
 // Package bptree provides a B+Tree implementation using memory-mapped files.
 //
-// The tree stores uint64 keys and uint64 values, optimized for concurrent reads.
+// The tree stores composite keys (Key1, Key2) with uint64 values, optimized for concurrent reads.
 // Changes are persisted to disk via flash operations.
 // Supports multiple root trees identified by rootID.
 //
@@ -13,12 +13,12 @@
 //	defer tree.Close()
 //
 //	rootID, _ := tree.CreateRoot()
-//	tree.Insert(rootID, 1, 100)
-//	tree.Insert(rootID, 2, 200)
+//	tree.Insert(rootID, 1, 100, 500)  // key1=1, key2=100, value=500
+//	tree.Insert(rootID, 1, 200, 600)  // key1=1, key2=200, value=600
 //
-//	val, ok := tree.Find(rootID, 1)
+//	val, ok := tree.Find(rootID, 1, 100)
 //	if ok {
-//	    fmt.Println(val) // 100
+//	    fmt.Println(val) // 500
 //	}
 //
 //	tree.Flash() // Sync to disk
@@ -34,7 +34,7 @@ import (
 // RootID is the identifier for a root tree.
 type RootID = bpager.RootID
 
-// BPTree is a B+Tree that stores uint64 keys and values.
+// BPTree is a B+Tree that stores composite keys (Key1, Key2) and values.
 // Supports multiple root trees.
 type BPTree struct {
 	pager *bpager.Pager
@@ -67,7 +67,7 @@ func (t *BPTree) Count(rootID RootID) int {
 	//	defer t.mu.RUnlock()
 
 	count := 0
-	t.scanInternal(rootID, 0, ^uint64(0), func(key, value uint64) bool {
+	t.scanInternal(rootID, 0, 0, ^uint64(0), ^uint64(0), func(key1, key2, value uint64) bool {
 		count++
 		return true
 	})
@@ -101,9 +101,9 @@ func (t *BPTree) RootCount() uint64 {
 	return t.pager.RootCount()
 }
 
-// Find retrieves a value by key from a specific root tree.
+// Find retrieves a value by composite key (key1, key2) from a specific root tree.
 // Returns (value, true) if found, (0, false) otherwise.
-func (t *BPTree) Find(rootID RootID, key uint64) (uint64, bool) {
+func (t *BPTree) Find(rootID RootID, key1, key2 uint64) (uint64, bool) {
 	//	t.mu.RLock()
 	//	defer t.mu.RUnlock()
 
@@ -112,20 +112,20 @@ func (t *BPTree) Find(rootID RootID, key uint64) (uint64, bool) {
 		return 0, false // Empty tree
 	}
 
-	return t.search(rootPageID, key)
+	return t.search(rootPageID, key1, key2)
 }
 
-// FindRange iterates over all key-value pairs where start <= key <= end.
+// FindRange iterates over all key-value pairs where (start1,start2) <= (key1,key2) <= (end1,end2).
 // The callback function is called for each pair. Return false to stop iteration.
-func (t *BPTree) FindRange(rootID RootID, start, end uint64, fn func(key, value uint64) bool) error {
+func (t *BPTree) FindRange(rootID RootID, start1, start2, end1, end2 uint64, fn func(key1, key2, value uint64) bool) error {
 	//	t.mu.RLock()
 	//	defer t.mu.RUnlock()
 
-	return t.scanInternal(rootID, start, end, fn)
+	return t.scanInternal(rootID, start1, start2, end1, end2, fn)
 }
 
-// Insert inserts or updates a key-value pair in a specific root tree.
-func (t *BPTree) Insert(rootID RootID, key, value uint64) error {
+// Insert inserts or updates a key-value pair with composite key in a specific root tree.
+func (t *BPTree) Insert(rootID RootID, key1, key2, value uint64) error {
 	//	t.mu.Lock()
 	//	defer t.mu.Unlock()
 
@@ -139,7 +139,7 @@ func (t *BPTree) Insert(rootID RootID, key, value uint64) error {
 		}
 		data := t.pager.GetPage(newPageID)
 		leaf := bnode.NewLeafNode(data, true)
-		leaf.Put(key, value)
+		leaf.Put(key1, key2, value)
 		if err := t.pager.SetRootPage(rootID, newPageID); err != nil {
 			return err
 		}
@@ -147,7 +147,7 @@ func (t *BPTree) Insert(rootID RootID, key, value uint64) error {
 	}
 
 	// Insert into existing tree
-	splitKey, newChildID, err := t.insert(rootPageID, key, value)
+	splitKey, newChildID, err := t.insert(rootPageID, key1, key2, value)
 	if err != nil {
 		return err
 	}
@@ -169,9 +169,9 @@ func (t *BPTree) Insert(rootID RootID, key, value uint64) error {
 	return nil
 }
 
-// Delete removes a key from a specific root tree.
+// Delete removes a composite key from a specific root tree.
 // Returns true if the key was found and removed.
-func (t *BPTree) Delete(rootID RootID, key uint64) bool {
+func (t *BPTree) Delete(rootID RootID, key1, key2 uint64) bool {
 	//	t.mu.Lock()
 	//	defer t.mu.Unlock()
 
@@ -180,7 +180,7 @@ func (t *BPTree) Delete(rootID RootID, key uint64) bool {
 		return false
 	}
 
-	deleted, _ := t.deleteRecursive(rootPageID, key)
+	deleted, _ := t.deleteRecursive(rootPageID, key1, key2)
 
 	// Check if root needs to shrink
 	if deleted {
@@ -209,8 +209,8 @@ func (t *BPTree) Delete(rootID RootID, key uint64) bool {
 	return deleted
 }
 
-// search recursively searches for a key starting from the given page.
-func (t *BPTree) search(pageID bpager.PageID, key uint64) (uint64, bool) {
+// search recursively searches for a composite key starting from the given page.
+func (t *BPTree) search(pageID bpager.PageID, key1, key2 uint64) (uint64, bool) {
 	data := t.pager.GetPage(pageID)
 	if data == nil {
 		return 0, false
@@ -220,18 +220,18 @@ func (t *BPTree) search(pageID bpager.PageID, key uint64) (uint64, bool) {
 
 	if nodeType == bnode.NodeTypeLeaf {
 		leaf := bnode.NewLeafNode(data, false)
-		return leaf.Get(key)
+		return leaf.Get(key1, key2)
 	}
 
-	// Internal node - find child to search
+	// Internal node - find child to search (use key1 for navigation)
 	internal := bnode.NewInternalNode(data, false)
-	childID := internal.GetChildForKey(key)
-	return t.search(childID, key)
+	childID := internal.GetChildForKey(key1)
+	return t.search(childID, key1, key2)
 }
 
-// insert recursively inserts a key-value pair.
+// insert recursively inserts a key-value pair with composite key.
 // Returns (splitKey, newPageID, error). If newPageID is non-zero, a split occurred.
-func (t *BPTree) insert(pageID bpager.PageID, key, value uint64) (uint64, bpager.PageID, error) {
+func (t *BPTree) insert(pageID bpager.PageID, key1, key2, value uint64) (uint64, bpager.PageID, error) {
 	data := t.pager.GetPage(pageID)
 	if data == nil {
 		return 0, 0, fmt.Errorf("failed to get page %d", pageID)
@@ -240,28 +240,28 @@ func (t *BPTree) insert(pageID bpager.PageID, key, value uint64) (uint64, bpager
 	nodeType := bnode.GetNodeType(data)
 
 	if nodeType == bnode.NodeTypeLeaf {
-		return t.insertLeaf(pageID, key, value)
+		return t.insertLeaf(pageID, key1, key2, value)
 	}
 
-	return t.insertInternal(pageID, key, value)
+	return t.insertInternal(pageID, key1, key2, value)
 }
 
 // insertLeaf inserts into a leaf node.
 // Note: pageID is used instead of data slice because AllocatePage may trigger
 // mmap remap, invalidating any previously obtained slices.
-func (t *BPTree) insertLeaf(pageID bpager.PageID, key, value uint64) (uint64, bpager.PageID, error) {
+func (t *BPTree) insertLeaf(pageID bpager.PageID, key1, key2, value uint64) (uint64, bpager.PageID, error) {
 	data := t.pager.GetPage(pageID)
 	leaf := bnode.NewLeafNode(data, false)
 
 	// If node has room, just insert
 	if !leaf.IsFull() {
-		leaf.Put(key, value)
+		leaf.Put(key1, key2, value)
 		return 0, 0, nil
 	}
 
 	// Check if it's an update (existing key)
-	if _, found := leaf.Get(key); found {
-		leaf.Put(key, value)
+	if _, found := leaf.Get(key1, key2); found {
+		leaf.Put(key1, key2, value)
 		return 0, 0, nil
 	}
 
@@ -279,10 +279,11 @@ func (t *BPTree) insertLeaf(pageID bpager.PageID, key, value uint64) (uint64, bp
 	splitKey, newLeaf := leaf.Split(newData)
 
 	// Insert the new key into appropriate node
-	if key < splitKey {
-		leaf.Put(key, value)
+	// Use key1 for comparison with splitKey (which is the first key1 of new node)
+	if key1 < splitKey {
+		leaf.Put(key1, key2, value)
 	} else {
-		newLeaf.Put(key, value)
+		newLeaf.Put(key1, key2, value)
 	}
 
 	// Update leaf links
@@ -295,13 +296,13 @@ func (t *BPTree) insertLeaf(pageID bpager.PageID, key, value uint64) (uint64, bp
 // insertInternal handles insertion through an internal node.
 // Note: pageID is used instead of data slice because AllocatePage may trigger
 // mmap remap, invalidating any previously obtained slices.
-func (t *BPTree) insertInternal(pageID bpager.PageID, key, value uint64) (uint64, bpager.PageID, error) {
+func (t *BPTree) insertInternal(pageID bpager.PageID, key1, key2, value uint64) (uint64, bpager.PageID, error) {
 	data := t.pager.GetPage(pageID)
 	internal := bnode.NewInternalNode(data, false)
-	childID := internal.GetChildForKey(key)
+	childID := internal.GetChildForKey(key1)
 
 	// Recursively insert into child - this may trigger mmap remap
-	splitKey, newChildID, err := t.insert(childID, key, value)
+	splitKey, newChildID, err := t.insert(childID, key1, key2, value)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -348,9 +349,9 @@ func (t *BPTree) insertInternal(pageID bpager.PageID, key, value uint64) (uint64
 	return midKey, newPageID, nil
 }
 
-// deleteRecursive recursively deletes a key, handling underflow.
+// deleteRecursive recursively deletes a composite key, handling underflow.
 // Returns (deleted, underflow) where underflow indicates this node needs rebalancing.
-func (t *BPTree) deleteRecursive(pageID bpager.PageID, key uint64) (bool, bool) {
+func (t *BPTree) deleteRecursive(pageID bpager.PageID, key1, key2 uint64) (bool, bool) {
 	data := t.pager.GetPage(pageID)
 	if data == nil {
 		return false, false
@@ -360,16 +361,16 @@ func (t *BPTree) deleteRecursive(pageID bpager.PageID, key uint64) (bool, bool) 
 
 	if bnodeType == bnode.NodeTypeLeaf {
 		leaf := bnode.NewLeafNode(data, false)
-		deleted := leaf.Delete(key)
+		deleted := leaf.Delete(key1, key2)
 		return deleted, deleted && leaf.IsUnderflow()
 	}
 
-	// Internal node - find child and recurse
+	// Internal node - find child and recurse (use key1 for navigation)
 	internal := bnode.NewInternalNode(data, false)
-	childIdx := internal.Search(key)
+	childIdx := internal.Search(key1)
 	childID := internal.GetChild(childIdx)
 
-	deleted, childUnderflow := t.deleteRecursive(childID, key)
+	deleted, childUnderflow := t.deleteRecursive(childID, key1, key2)
 	if !deleted {
 		return false, false
 	}
@@ -483,14 +484,14 @@ func (t *BPTree) handleUnderflow(parent *bnode.InternalNode, childIdx int, paren
 
 // scanInternal is the internal scan implementation without locking.
 // Caller must hold at least a read lock.
-func (t *BPTree) scanInternal(rootID RootID, start, end uint64, fn func(key, value uint64) bool) error {
+func (t *BPTree) scanInternal(rootID RootID, start1, start2, end1, end2 uint64, fn func(key1, key2, value uint64) bool) error {
 	rootPageID := t.pager.GetRootPage(rootID)
 	if rootPageID == 0 {
 		return nil // Empty tree
 	}
 
 	// Find the leaf containing start key
-	leafID := t.findLeaf(rootPageID, start)
+	leafID := t.findLeaf(rootPageID, start1)
 	if leafID == 0 {
 		return nil
 	}
@@ -503,17 +504,21 @@ func (t *BPTree) scanInternal(rootID RootID, start, end uint64, fn func(key, val
 		}
 
 		leaf := bnode.NewLeafNode(data, false)
-		pairs := leaf.Range(start, end)
+		pairs := leaf.Range(start1, start2, end1, end2)
 
 		for _, pair := range pairs {
-			if !fn(pair.Key, pair.Value) {
+			if !fn(pair.Key1, pair.Key2, pair.Value) {
 				return nil // User requested stop
 			}
 		}
 
 		// Check if we've passed the end
-		if leaf.KeyCount() > 0 && leaf.GetKeyAt(leaf.KeyCount()-1) >= end {
-			break
+		if leaf.KeyCount() > 0 {
+			lastKey1 := leaf.GetKey1At(leaf.KeyCount() - 1)
+			lastKey2 := leaf.GetKey2At(leaf.KeyCount() - 1)
+			if lastKey1 > end1 || (lastKey1 == end1 && lastKey2 >= end2) {
+				break
+			}
 		}
 
 		leafID = leaf.NextLeaf()
@@ -523,7 +528,7 @@ func (t *BPTree) scanInternal(rootID RootID, start, end uint64, fn func(key, val
 }
 
 // findLeaf finds the leaf page that would contain the given key.
-func (t *BPTree) findLeaf(pageID bpager.PageID, key uint64) bpager.PageID {
+func (t *BPTree) findLeaf(pageID bpager.PageID, key1 uint64) bpager.PageID {
 	data := t.pager.GetPage(pageID)
 	if data == nil {
 		return 0
@@ -536,6 +541,6 @@ func (t *BPTree) findLeaf(pageID bpager.PageID, key uint64) bpager.PageID {
 	}
 
 	internal := bnode.NewInternalNode(data, false)
-	childID := internal.GetChildForKey(key)
-	return t.findLeaf(childID, key)
+	childID := internal.GetChildForKey(key1)
+	return t.findLeaf(childID, key1)
 }

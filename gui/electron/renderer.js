@@ -15,18 +15,23 @@ const elements = {
     btnClose: document.getElementById('btnClose'),
 
     // Operations
-    putKey: document.getElementById('putKey'),
+    putKey1: document.getElementById('putKey1'),
+    putKey2: document.getElementById('putKey2'),
     putValue: document.getElementById('putValue'),
     btnPut: document.getElementById('btnPut'),
 
-    getKey: document.getElementById('getKey'),
+    getKey1: document.getElementById('getKey1'),
+    getKey2: document.getElementById('getKey2'),
     btnGet: document.getElementById('btnGet'),
 
-    deleteKey: document.getElementById('deleteKey'),
+    deleteKey1: document.getElementById('deleteKey1'),
+    deleteKey2: document.getElementById('deleteKey2'),
     btnDelete: document.getElementById('btnDelete'),
 
-    scanStart: document.getElementById('scanStart'),
-    scanEnd: document.getElementById('scanEnd'),
+    scanStart1: document.getElementById('scanStart1'),
+    scanStart2: document.getElementById('scanStart2'),
+    scanEnd1: document.getElementById('scanEnd1'),
+    scanEnd2: document.getElementById('scanEnd2'),
     btnScan: document.getElementById('btnScan'),
 
     // Actions
@@ -35,7 +40,8 @@ const elements = {
 
     // Benchmark
     benchCount: document.getElementById('benchCount'),
-    benchKeyRange: document.getElementById('benchKeyRange'),
+    benchKey1Range: document.getElementById('benchKey1Range'),
+    benchKey2Range: document.getElementById('benchKey2Range'),
     btnBenchmark: document.getElementById('btnBenchmark'),
 
     // Results
@@ -164,18 +170,19 @@ async function handleClose() {
 }
 
 async function handlePut() {
-    const key = elements.putKey.value;
+    const key1 = elements.putKey1.value;
+    const key2 = elements.putKey2.value;
     const value = elements.putValue.value;
 
-    if (key === '' || value === '') {
-        log('error', 'Please enter both key and value');
+    if (key1 === '' || key2 === '' || value === '') {
+        log('error', 'Please enter key1, key2, and value');
         return;
     }
 
-    log('info', `Put: key=${key}, value=${value}`);
+    log('info', `Put: key1=${key1}, key2=${key2}, value=${value}`);
     const result = await apiRequest('/put', {
         method: 'POST',
-        body: JSON.stringify({ key: parseInt(key), value: parseInt(value) })
+        body: JSON.stringify({ key1: parseInt(key1), key2: parseInt(key2), value: parseInt(value) })
     });
 
     if (result.success) {
@@ -187,39 +194,41 @@ async function handlePut() {
 }
 
 async function handleGet() {
-    const key = elements.getKey.value;
+    const key1 = elements.getKey1.value;
+    const key2 = elements.getKey2.value;
 
-    if (key === '') {
-        log('error', 'Please enter a key');
+    if (key1 === '' || key2 === '') {
+        log('error', 'Please enter key1 and key2');
         return;
     }
 
-    log('info', `Get: key=${key}`);
-    const result = await apiRequest(`/get?key=${key}`);
+    log('info', `Get: key1=${key1}, key2=${key2}`);
+    const result = await apiRequest(`/get?key1=${key1}&key2=${key2}`);
 
     if (result.success) {
-        log('success', `Found: key=${result.data.key}, value=${result.data.value}`, result.data);
+        log('success', `Found: key1=${result.data.key1}, key2=${result.data.key2}, value=${result.data.value}`, result.data);
     } else {
         log('error', `Get failed: ${result.error}`);
     }
 }
 
 async function handleDelete() {
-    const key = elements.deleteKey.value;
+    const key1 = elements.deleteKey1.value;
+    const key2 = elements.deleteKey2.value;
 
-    if (key === '') {
-        log('error', 'Please enter a key');
+    if (key1 === '' || key2 === '') {
+        log('error', 'Please enter key1 and key2');
         return;
     }
 
-    log('info', `Delete: key=${key}`);
-    const result = await apiRequest(`/delete?key=${key}`, { method: 'DELETE' });
+    log('info', `Delete: key1=${key1}, key2=${key2}`);
+    const result = await apiRequest(`/delete?key1=${key1}&key2=${key2}`, { method: 'DELETE' });
 
     if (result.success) {
         if (result.data.deleted) {
-            log('success', `Key ${key} deleted`);
+            log('success', `Key (${key1}, ${key2}) deleted`);
         } else {
-            log('info', `Key ${key} was not found`);
+            log('info', `Key (${key1}, ${key2}) was not found`);
         }
         refreshStatus();
     } else {
@@ -228,16 +237,18 @@ async function handleDelete() {
 }
 
 async function handleScan() {
-    const start = elements.scanStart.value;
-    const end = elements.scanEnd.value;
+    const start1 = elements.scanStart1.value;
+    const start2 = elements.scanStart2.value;
+    const end1 = elements.scanEnd1.value;
+    const end2 = elements.scanEnd2.value;
 
-    if (start === '' || end === '') {
-        log('error', 'Please enter both start and end');
+    if (start1 === '' || start2 === '' || end1 === '' || end2 === '') {
+        log('error', 'Please enter start1, start2, end1, and end2');
         return;
     }
 
-    log('info', `Scan: range=[${start}, ${end}]`);
-    const result = await apiRequest(`/scan?start=${start}&end=${end}`);
+    log('info', `Scan: range=[(${start1}, ${start2}), (${end1}, ${end2})]`);
+    const result = await apiRequest(`/scan?start1=${start1}&start2=${start2}&end1=${end1}&end2=${end2}`);
 
     if (result.success) {
         log('success', `Found ${result.data.count} entries`);
@@ -249,13 +260,13 @@ async function handleScan() {
             let tableHtml = `
                 <table class="scan-results">
                     <thead>
-                        <tr><th>Key</th><th>Value</th></tr>
+                        <tr><th>Key1</th><th>Key2</th><th>Value</th></tr>
                     </thead>
                     <tbody>
             `;
 
             for (const item of result.data.items) {
-                tableHtml += `<tr><td>${item.key}</td><td>${item.value}</td></tr>`;
+                tableHtml += `<tr><td>${item.key1}</td><td>${item.key2}</td><td>${item.value}</td></tr>`;
             }
 
             tableHtml += '</tbody></table>';
@@ -290,16 +301,17 @@ function handleClearLog() {
 
 async function handleBenchmark() {
     const count = parseInt(elements.benchCount.value) || 10000;
-    const keyRange = parseInt(elements.benchKeyRange.value) || 1000000;
+    const key1Range = parseInt(elements.benchKey1Range.value) || 1000000;
+    const key2Range = parseInt(elements.benchKey2Range.value) || 1000000;
 
-    log('info', `Running benchmark: ${count.toLocaleString()} operations, key range: 0-${keyRange.toLocaleString()}...`);
+    log('info', `Running benchmark: ${count.toLocaleString()} ops, Key1: 0-${key1Range.toLocaleString()}, Key2: 0-${key2Range.toLocaleString()}...`);
     elements.btnBenchmark.disabled = true;
     elements.btnBenchmark.textContent = '⏳ Running...';
 
     try {
         const result = await apiRequest('/benchmark', {
             method: 'POST',
-            body: JSON.stringify({ count, keyRange })
+            body: JSON.stringify({ count, key1Range, key2Range })
         });
 
         if (result.success) {
@@ -381,15 +393,15 @@ function init() {
         if (e.key === 'Enter' && isConnected) handlePut();
     });
 
-    elements.getKey.addEventListener('keypress', (e) => {
+    elements.getKey2.addEventListener('keypress', (e) => {
         if (e.key === 'Enter' && isConnected) handleGet();
     });
 
-    elements.deleteKey.addEventListener('keypress', (e) => {
+    elements.deleteKey2.addEventListener('keypress', (e) => {
         if (e.key === 'Enter' && isConnected) handleDelete();
     });
 
-    elements.scanEnd.addEventListener('keypress', (e) => {
+    elements.scanEnd2.addEventListener('keypress', (e) => {
         if (e.key === 'Enter' && isConnected) handleScan();
     });
 

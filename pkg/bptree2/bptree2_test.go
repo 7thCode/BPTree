@@ -24,39 +24,45 @@ func TestBasicOperations(t *testing.T) {
 		t.Fatalf("CreateRoot failed: %v", err)
 	}
 
-	// Insert
-	if err := tree.Insert(rootID, 10, 100); err != nil {
+	// Insert with composite key (key1, key2)
+	if err := tree.Insert(rootID, 10, 100, 1000); err != nil {
 		t.Fatalf("Insert failed: %v", err)
 	}
-	if err := tree.Insert(rootID, 5, 50); err != nil {
+	if err := tree.Insert(rootID, 5, 50, 500); err != nil {
 		t.Fatalf("Insert failed: %v", err)
 	}
-	if err := tree.Insert(rootID, 15, 150); err != nil {
+	if err := tree.Insert(rootID, 15, 150, 1500); err != nil {
 		t.Fatalf("Insert failed: %v", err)
 	}
 
-	// Find
-	val, found := tree.Find(rootID, 10)
+	// Find with exact composite key match (AND condition)
+	val, found := tree.Find(rootID, 10, 100)
 	if !found {
-		t.Error("key 10 should be found")
+		t.Error("key (10, 100) should be found")
 	}
-	if val != 100 {
-		t.Errorf("expected 100, got %d", val)
+	if val != 1000 {
+		t.Errorf("expected 1000, got %d", val)
 	}
 
-	// Find non-existent
-	_, found = tree.Find(rootID, 20)
+	// Find non-existent key pair - key1 exists but key2 doesn't
+	_, found = tree.Find(rootID, 10, 200)
 	if found {
-		t.Error("key 20 should not be found")
+		t.Error("key (10, 200) should not be found - AND condition")
+	}
+
+	// Find completely non-existent
+	_, found = tree.Find(rootID, 20, 200)
+	if found {
+		t.Error("key (20, 200) should not be found")
 	}
 
 	// Update
-	if err := tree.Insert(rootID, 10, 200); err != nil {
+	if err := tree.Insert(rootID, 10, 100, 2000); err != nil {
 		t.Fatalf("Insert failed: %v", err)
 	}
-	val, _ = tree.Find(rootID, 10)
-	if val != 200 {
-		t.Errorf("expected 200 after update, got %d", val)
+	val, _ = tree.Find(rootID, 10, 100)
+	if val != 2000 {
+		t.Errorf("expected 2000 after update, got %d", val)
 	}
 }
 
@@ -73,21 +79,21 @@ func TestLargeInsert(t *testing.T) {
 	rootID, _ := tree.CreateRoot()
 	n := 10000
 
-	// Insert n keys
+	// Insert n keys with composite keys
 	for i := 0; i < n; i++ {
-		if err := tree.Insert(rootID, uint64(i), uint64(i*10)); err != nil {
+		if err := tree.Insert(rootID, uint64(i), uint64(i*2), uint64(i*10)); err != nil {
 			t.Fatalf("Insert failed at %d: %v", i, err)
 		}
 	}
 
 	// Verify all keys
 	for i := 0; i < n; i++ {
-		val, found := tree.Find(rootID, uint64(i))
+		val, found := tree.Find(rootID, uint64(i), uint64(i*2))
 		if !found {
-			t.Fatalf("key %d should be found", i)
+			t.Fatalf("key (%d, %d) should be found", i, i*2)
 		}
 		if val != uint64(i*10) {
-			t.Fatalf("key %d: expected %d, got %d", i, i*10, val)
+			t.Fatalf("key (%d, %d): expected %d, got %d", i, i*2, i*10, val)
 		}
 	}
 
@@ -117,19 +123,19 @@ func TestMillionInsert(t *testing.T) {
 
 	// Insert n keys
 	for i := 0; i < n; i++ {
-		if err := tree.Insert(rootID, uint64(i), uint64(i*10)); err != nil {
+		if err := tree.Insert(rootID, uint64(i), uint64(i*2), uint64(i*10)); err != nil {
 			t.Fatalf("Insert failed at %d: %v", i, err)
 		}
 	}
 
 	// Verify some keys
 	for i := 0; i < n; i += 10000 {
-		val, found := tree.Find(rootID, uint64(i))
+		val, found := tree.Find(rootID, uint64(i), uint64(i*2))
 		if !found {
-			t.Fatalf("key %d should be found", i)
+			t.Fatalf("key (%d, %d) should be found", i, i*2)
 		}
 		if val != uint64(i*10) {
-			t.Fatalf("key %d: expected %d, got %d", i, i*10, val)
+			t.Fatalf("key (%d, %d): expected %d, got %d", i, i*2, i*10, val)
 		}
 	}
 }
@@ -148,26 +154,28 @@ func TestRandomInsert(t *testing.T) {
 
 	// Generate random keys
 	n := 5000
-	keys := make([]uint64, n)
-	for i := range keys {
-		keys[i] = rand.Uint64()
+	keys1 := make([]uint64, n)
+	keys2 := make([]uint64, n)
+	for i := range keys1 {
+		keys1[i] = rand.Uint64()
+		keys2[i] = rand.Uint64()
 	}
 
 	// Insert
-	for i, k := range keys {
-		if err := tree.Insert(rootID, k, uint64(i)); err != nil {
+	for i := 0; i < n; i++ {
+		if err := tree.Insert(rootID, keys1[i], keys2[i], uint64(i)); err != nil {
 			t.Fatalf("Insert failed: %v", err)
 		}
 	}
 
 	// Verify
-	for i, k := range keys {
-		val, found := tree.Find(rootID, k)
+	for i := 0; i < n; i++ {
+		val, found := tree.Find(rootID, keys1[i], keys2[i])
 		if !found {
-			t.Fatalf("key %d should be found", k)
+			t.Fatalf("key (%d, %d) should be found", keys1[i], keys2[i])
 		}
 		if val != uint64(i) {
-			t.Fatalf("key %d: expected %d, got %d", k, i, val)
+			t.Fatalf("key (%d, %d): expected %d, got %d", keys1[i], keys2[i], i, val)
 		}
 	}
 }
@@ -184,17 +192,17 @@ func TestRangeScan(t *testing.T) {
 
 	rootID, _ := tree.CreateRoot()
 
-	// Insert 100 keys
+	// Insert 100 keys with key2 = key1
 	for i := 1; i <= 100; i++ {
-		if err := tree.Insert(rootID, uint64(i), uint64(i*10)); err != nil {
+		if err := tree.Insert(rootID, uint64(i), uint64(i), uint64(i*10)); err != nil {
 			t.Fatalf("Insert failed: %v", err)
 		}
 	}
 
-	// FindRange [30, 50]
+	// FindRange [30, 30] to [50, 50]
 	var results []uint64
-	err = tree.FindRange(rootID, 30, 50, func(key, value uint64) bool {
-		results = append(results, key)
+	err = tree.FindRange(rootID, 30, 30, 50, 50, func(key1, key2, value uint64) bool {
+		results = append(results, key1)
 		return true
 	})
 	if err != nil {
@@ -227,11 +235,11 @@ func TestFindRangeEarlyStop(t *testing.T) {
 	rootID, _ := tree.CreateRoot()
 
 	for i := 1; i <= 100; i++ {
-		tree.Insert(rootID, uint64(i), uint64(i))
+		tree.Insert(rootID, uint64(i), uint64(i), uint64(i))
 	}
 
 	count := 0
-	tree.FindRange(rootID, 1, 100, func(key, value uint64) bool {
+	tree.FindRange(rootID, 1, 1, 100, 100, func(key1, key2, value uint64) bool {
 		count++
 		return count < 10 // Stop after 10
 	})
@@ -253,7 +261,7 @@ func TestPersistence(t *testing.T) {
 
 	rootID, _ := tree1.CreateRoot()
 	for i := 0; i < 1000; i++ {
-		tree1.Insert(rootID, uint64(i), uint64(i*10))
+		tree1.Insert(rootID, uint64(i), uint64(i*2), uint64(i*10))
 	}
 	tree1.Flash()
 	tree1.Close()
@@ -267,12 +275,12 @@ func TestPersistence(t *testing.T) {
 
 	// Use same rootID (0)
 	for i := 0; i < 1000; i++ {
-		val, found := tree2.Find(rootID, uint64(i))
+		val, found := tree2.Find(rootID, uint64(i), uint64(i*2))
 		if !found {
-			t.Fatalf("key %d should be found after reopen", i)
+			t.Fatalf("key (%d, %d) should be found after reopen", i, i*2)
 		}
 		if val != uint64(i*10) {
-			t.Fatalf("key %d: expected %d, got %d", i, i*10, val)
+			t.Fatalf("key (%d, %d): expected %d, got %d", i, i*2, i*10, val)
 		}
 	}
 }
@@ -291,31 +299,31 @@ func TestDelete(t *testing.T) {
 
 	// Insert keys
 	for i := 1; i <= 10; i++ {
-		tree.Insert(rootID, uint64(i), uint64(i*10))
+		tree.Insert(rootID, uint64(i), uint64(i*2), uint64(i*10))
 	}
 
 	// Delete some keys
-	if !tree.Delete(rootID, 5) {
-		t.Error("Delete(5) should return true")
+	if !tree.Delete(rootID, 5, 10) {
+		t.Error("Delete(5, 10) should return true")
 	}
-	if tree.Delete(rootID, 5) {
-		t.Error("Delete(5) second time should return false")
+	if tree.Delete(rootID, 5, 10) {
+		t.Error("Delete(5, 10) second time should return false")
 	}
 
 	// Verify
-	_, found := tree.Find(rootID, 5)
+	_, found := tree.Find(rootID, 5, 10)
 	if found {
-		t.Error("key 5 should not be found after delete")
+		t.Error("key (5, 10) should not be found after delete")
 	}
 
 	// Other keys should still exist
-	val, found := tree.Find(rootID, 4)
+	val, found := tree.Find(rootID, 4, 8)
 	if !found || val != 40 {
-		t.Error("key 4 should still exist")
+		t.Error("key (4, 8) should still exist")
 	}
-	val, found = tree.Find(rootID, 6)
+	val, found = tree.Find(rootID, 6, 12)
 	if !found || val != 60 {
-		t.Error("key 6 should still exist")
+		t.Error("key (6, 12) should still exist")
 	}
 }
 
@@ -334,13 +342,13 @@ func TestLargeDelete(t *testing.T) {
 
 	// Insert n keys
 	for i := 0; i < n; i++ {
-		tree.Insert(rootID, uint64(i), uint64(i*10))
+		tree.Insert(rootID, uint64(i), uint64(i*2), uint64(i*10))
 	}
 
 	// Delete all keys
 	for i := 0; i < n; i++ {
-		if !tree.Delete(rootID, uint64(i)) {
-			t.Fatalf("Delete(%d) should return true", i)
+		if !tree.Delete(rootID, uint64(i), uint64(i*2)) {
+			t.Fatalf("Delete(%d, %d) should return true", i, i*2)
 		}
 	}
 
@@ -351,9 +359,9 @@ func TestLargeDelete(t *testing.T) {
 
 	// Verify no keys found
 	for i := 0; i < n; i++ {
-		_, found := tree.Find(rootID, uint64(i))
+		_, found := tree.Find(rootID, uint64(i), uint64(i*2))
 		if found {
-			t.Fatalf("key %d should not be found after delete", i)
+			t.Fatalf("key (%d, %d) should not be found after delete", i, i*2)
 		}
 	}
 }
@@ -373,27 +381,27 @@ func TestDeleteWithPageReuse(t *testing.T) {
 
 	// Insert keys
 	for i := 0; i < n; i++ {
-		tree.Insert(rootID, uint64(i), uint64(i*10))
+		tree.Insert(rootID, uint64(i), uint64(i*2), uint64(i*10))
 	}
 
 	// Delete half the keys
 	for i := 0; i < n/2; i++ {
-		tree.Delete(rootID, uint64(i))
+		tree.Delete(rootID, uint64(i), uint64(i*2))
 	}
 
 	// Insert new keys (should reuse freed pages)
 	for i := n; i < n+n/2; i++ {
-		tree.Insert(rootID, uint64(i), uint64(i*10))
+		tree.Insert(rootID, uint64(i), uint64(i*2), uint64(i*10))
 	}
 
 	// Verify remaining keys
 	for i := n / 2; i < n+n/2; i++ {
-		val, found := tree.Find(rootID, uint64(i))
+		val, found := tree.Find(rootID, uint64(i), uint64(i*2))
 		if !found {
-			t.Fatalf("key %d should be found", i)
+			t.Fatalf("key (%d, %d) should be found", i, i*2)
 		}
 		if val != uint64(i*10) {
-			t.Fatalf("key %d: expected %d, got %d", i, i*10, val)
+			t.Fatalf("key (%d, %d): expected %d, got %d", i, i*2, i*10, val)
 		}
 	}
 }
@@ -413,13 +421,13 @@ func TestDeleteReverseOrder(t *testing.T) {
 
 	// Insert keys
 	for i := 0; i < n; i++ {
-		tree.Insert(rootID, uint64(i), uint64(i*10))
+		tree.Insert(rootID, uint64(i), uint64(i*2), uint64(i*10))
 	}
 
 	// Delete in reverse order
 	for i := n - 1; i >= 0; i-- {
-		if !tree.Delete(rootID, uint64(i)) {
-			t.Fatalf("Delete(%d) should return true", i)
+		if !tree.Delete(rootID, uint64(i), uint64(i*2)) {
+			t.Fatalf("Delete(%d, %d) should return true", i, i*2)
 		}
 	}
 
@@ -444,7 +452,7 @@ func TestConcurrentReads(t *testing.T) {
 	// Populate
 	n := 1000
 	for i := 0; i < n; i++ {
-		tree.Insert(rootID, uint64(i), uint64(i*10))
+		tree.Insert(rootID, uint64(i), uint64(i*2), uint64(i*10))
 	}
 
 	// Concurrent reads
@@ -457,14 +465,15 @@ func TestConcurrentReads(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for i := 0; i < readsPerReader; i++ {
-				key := uint64(rand.Intn(n))
-				val, found := tree.Find(rootID, key)
+				key1 := uint64(rand.Intn(n))
+				key2 := key1 * 2
+				val, found := tree.Find(rootID, key1, key2)
 				if !found {
-					t.Errorf("key %d should be found", key)
+					t.Errorf("key (%d, %d) should be found", key1, key2)
 					return
 				}
-				if val != key*10 {
-					t.Errorf("key %d: expected %d, got %d", key, key*10, val)
+				if val != key1*10 {
+					t.Errorf("key (%d, %d): expected %d, got %d", key1, key2, key1*10, val)
 					return
 				}
 			}
@@ -487,19 +496,19 @@ func TestEmptyTree(t *testing.T) {
 	rootID, _ := tree.CreateRoot()
 
 	// Find from empty tree
-	_, found := tree.Find(rootID, 1)
+	_, found := tree.Find(rootID, 1, 2)
 	if found {
 		t.Error("empty tree should not find anything")
 	}
 
 	// Delete from empty tree
-	if tree.Delete(rootID, 1) {
+	if tree.Delete(rootID, 1, 2) {
 		t.Error("delete from empty tree should return false")
 	}
 
 	// FindRange empty tree
 	count := 0
-	tree.FindRange(rootID, 0, 100, func(key, value uint64) bool {
+	tree.FindRange(rootID, 0, 0, 100, 100, func(key1, key2, value uint64) bool {
 		count++
 		return true
 	})
@@ -530,25 +539,25 @@ func TestMultipleRoots(t *testing.T) {
 
 	// Insert different data into each root
 	for i := 0; i < 100; i++ {
-		tree.Insert(root1, uint64(i), uint64(i*10))
-		tree.Insert(root2, uint64(i), uint64(i*100))
-		tree.Insert(root3, uint64(i), uint64(i*1000))
+		tree.Insert(root1, uint64(i), uint64(i*2), uint64(i*10))
+		tree.Insert(root2, uint64(i), uint64(i*2), uint64(i*100))
+		tree.Insert(root3, uint64(i), uint64(i*2), uint64(i*1000))
 	}
 
 	// Verify each root has independent data
 	for i := 0; i < 100; i++ {
-		val1, _ := tree.Find(root1, uint64(i))
-		val2, _ := tree.Find(root2, uint64(i))
-		val3, _ := tree.Find(root3, uint64(i))
+		val1, _ := tree.Find(root1, uint64(i), uint64(i*2))
+		val2, _ := tree.Find(root2, uint64(i), uint64(i*2))
+		val3, _ := tree.Find(root3, uint64(i), uint64(i*2))
 
 		if val1 != uint64(i*10) {
-			t.Errorf("root1 key %d: expected %d, got %d", i, i*10, val1)
+			t.Errorf("root1 key (%d, %d): expected %d, got %d", i, i*2, i*10, val1)
 		}
 		if val2 != uint64(i*100) {
-			t.Errorf("root2 key %d: expected %d, got %d", i, i*100, val2)
+			t.Errorf("root2 key (%d, %d): expected %d, got %d", i, i*2, i*100, val2)
 		}
 		if val3 != uint64(i*1000) {
-			t.Errorf("root3 key %d: expected %d, got %d", i, i*1000, val3)
+			t.Errorf("root3 key (%d, %d): expected %d, got %d", i, i*2, i*1000, val3)
 		}
 	}
 
@@ -559,7 +568,7 @@ func TestMultipleRoots(t *testing.T) {
 
 	// Delete from one root doesn't affect others
 	for i := 0; i < 50; i++ {
-		tree.Delete(root1, uint64(i))
+		tree.Delete(root1, uint64(i), uint64(i*2))
 	}
 
 	if tree.Count(root1) != 50 {
@@ -580,8 +589,8 @@ func TestMultipleRootsPersistence(t *testing.T) {
 	root2, _ := tree1.CreateRoot()
 
 	for i := 0; i < 100; i++ {
-		tree1.Insert(root1, uint64(i), uint64(i*10))
-		tree1.Insert(root2, uint64(i), uint64(i*100))
+		tree1.Insert(root1, uint64(i), uint64(i*2), uint64(i*10))
+		tree1.Insert(root2, uint64(i), uint64(i*2), uint64(i*100))
 	}
 	tree1.Flash()
 	tree1.Close()
@@ -591,15 +600,60 @@ func TestMultipleRootsPersistence(t *testing.T) {
 	defer tree2.Close()
 
 	for i := 0; i < 100; i++ {
-		val1, found1 := tree2.Find(root1, uint64(i))
-		val2, found2 := tree2.Find(root2, uint64(i))
+		val1, found1 := tree2.Find(root1, uint64(i), uint64(i*2))
+		val2, found2 := tree2.Find(root2, uint64(i), uint64(i*2))
 
 		if !found1 || val1 != uint64(i*10) {
-			t.Errorf("root1 key %d: expected %d, got %d (found=%v)", i, i*10, val1, found1)
+			t.Errorf("root1 key (%d, %d): expected %d, got %d (found=%v)", i, i*2, i*10, val1, found1)
 		}
 		if !found2 || val2 != uint64(i*100) {
-			t.Errorf("root2 key %d: expected %d, got %d (found=%v)", i, i*100, val2, found2)
+			t.Errorf("root2 key (%d, %d): expected %d, got %d (found=%v)", i, i*2, i*100, val2, found2)
 		}
+	}
+}
+
+func TestAndCondition(t *testing.T) {
+	// Test that AND condition works correctly
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "test.db")
+
+	tree, err := bptree2.Open(path)
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer tree.Close()
+
+	rootID, _ := tree.CreateRoot()
+
+	// Insert multiple entries with same key1 but different key2
+	tree.Insert(rootID, 100, 1, 1001)
+	tree.Insert(rootID, 100, 2, 1002)
+	tree.Insert(rootID, 100, 3, 1003)
+
+	// Insert entry with different key1
+	tree.Insert(rootID, 200, 1, 2001)
+
+	// Test AND condition - must match both key1 AND key2
+	val, found := tree.Find(rootID, 100, 1)
+	if !found || val != 1001 {
+		t.Errorf("expected 1001, got %d (found=%v)", val, found)
+	}
+
+	val, found = tree.Find(rootID, 100, 2)
+	if !found || val != 1002 {
+		t.Errorf("expected 1002, got %d (found=%v)", val, found)
+	}
+
+	// Key1 matches but key2 doesn't
+	_, found = tree.Find(rootID, 100, 99)
+	if found {
+		t.Error("should not find (100, 99) - AND condition not satisfied")
+	}
+
+	// Key2 matches but key1 doesn't
+	_, found = tree.Find(rootID, 999, 1)
+	if found {
+		t.Error("should not find (999, 1) - AND condition not satisfied")
 	}
 }
 
@@ -614,7 +668,7 @@ func BenchmarkInsert(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		tree.Insert(rootID, uint64(i), uint64(i))
+		tree.Insert(rootID, uint64(i), uint64(i*2), uint64(i))
 	}
 }
 
@@ -629,12 +683,12 @@ func BenchmarkFind(b *testing.B) {
 
 	// Pre-populate
 	for i := 0; i < 100000; i++ {
-		tree.Insert(rootID, uint64(i), uint64(i))
+		tree.Insert(rootID, uint64(i), uint64(i*2), uint64(i))
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		tree.Find(rootID, uint64(i%100000))
+		tree.Find(rootID, uint64(i%100000), uint64((i%100000)*2))
 	}
 }
 
@@ -649,12 +703,12 @@ func BenchmarkFindRange(b *testing.B) {
 
 	// Pre-populate
 	for i := 0; i < 100000; i++ {
-		tree.Insert(rootID, uint64(i), uint64(i))
+		tree.Insert(rootID, uint64(i), uint64(i), uint64(i))
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		tree.FindRange(rootID, 1000, 2000, func(key, value uint64) bool {
+		tree.FindRange(rootID, 1000, 1000, 2000, 2000, func(key1, key2, value uint64) bool {
 			return true
 		})
 	}

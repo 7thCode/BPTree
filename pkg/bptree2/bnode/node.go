@@ -12,8 +12,8 @@ const (
 	UsableSize = 4096 - HeaderSize // 4080 bytes
 
 	// MaxLeafKeys is the maximum number of keys in a leaf node.
-	// Each key-value pair is 16 bytes (8 + 8).
-	MaxLeafKeys = UsableSize / 16 // 255
+	// Each key-value entry is 24 bytes (Key1: 8 + Key2: 8 + Value: 8).
+	MaxLeafKeys = UsableSize / 24 // 170
 
 	// MinLeafKeys is the minimum number of keys in a leaf node (except root).
 	// Should be at least ceil(MaxLeafKeys/2) - 1 for B+Tree invariant.
@@ -38,9 +38,10 @@ const (
 	NodeTypeLeaf NodeType = 1
 )
 
-// KVPair represents a key-value pair.
+// KVPair represents a key-value pair with composite key (Key1, Key2).
 type KVPair struct {
-	Key   uint64
+	Key1  uint64
+	Key2  uint64
 	Value uint64
 }
 

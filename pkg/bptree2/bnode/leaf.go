@@ -8,10 +8,9 @@ import (
 // LeafNode provides operations on a leaf node's raw byte slice.
 // The layout is:
 //   - Header: 16 bytes
-//   - Keys: [uint64 × KeyCount] starting at offset 16
-//   - Values: [uint64 × KeyCount] starting after keys
+//   - Entries: [Key1: 8, Key2: 8, Value: 8] × KeyCount starting at offset 16
 //
-// For MaxLeafKeys=255, keys occupy bytes 16-2055, values 2056-4095.
+// For MaxLeafKeys=170, each entry is 24 bytes, total data = 4080 bytes.
 type LeafNode struct {
 	data []byte
 }
@@ -53,68 +52,92 @@ func (n *LeafNode) SetNextLeaf(pageID uint64) {
 	setNextLeaf(n.data, pageID)
 }
 
-// keyOffset returns the byte offset for key at index i.
-func (n *LeafNode) keyOffset(i int) int {
-	return HeaderSize + i*8
+// entryOffset returns the byte offset for entry at index i.
+// Each entry is 24 bytes (Key1: 8 + Key2: 8 + Value: 8).
+func (n *LeafNode) entryOffset(i int) int {
+	return HeaderSize + i*24
 }
 
-// valueOffset returns the byte offset for value at index i.
-func (n *LeafNode) valueOffset(i int) int {
-	// Values start after all possible keys
-	return HeaderSize + MaxLeafKeys*8 + i*8
-}
-
-// getKey returns the key at index i.
-func (n *LeafNode) GetKey(i int) uint64 {
-	off := n.keyOffset(i)
+// GetKey1 returns the key1 at index i.
+func (n *LeafNode) GetKey1(i int) uint64 {
+	off := n.entryOffset(i)
 	return binary.BigEndian.Uint64(n.data[off : off+8])
 }
 
-// setKey sets the key at index i.
-func (n *LeafNode) setKey(i int, key uint64) {
-	off := n.keyOffset(i)
-	binary.BigEndian.PutUint64(n.data[off:off+8], key)
+// GetKey2 returns the key2 at index i.
+func (n *LeafNode) GetKey2(i int) uint64 {
+	off := n.entryOffset(i) + 8
+	return binary.BigEndian.Uint64(n.data[off : off+8])
+}
+
+// setKey1 sets the key1 at index i.
+func (n *LeafNode) setKey1(i int, key1 uint64) {
+	off := n.entryOffset(i)
+	binary.BigEndian.PutUint64(n.data[off:off+8], key1)
+}
+
+// setKey2 sets the key2 at index i.
+func (n *LeafNode) setKey2(i int, key2 uint64) {
+	off := n.entryOffset(i) + 8
+	binary.BigEndian.PutUint64(n.data[off:off+8], key2)
 }
 
 // getValue returns the value at index i.
 func (n *LeafNode) getValue(i int) uint64 {
-	off := n.valueOffset(i)
+	off := n.entryOffset(i) + 16
 	return binary.BigEndian.Uint64(n.data[off : off+8])
 }
 
 // setValue sets the value at index i.
 func (n *LeafNode) setValue(i int, value uint64) {
-	off := n.valueOffset(i)
+	off := n.entryOffset(i) + 16
 	binary.BigEndian.PutUint64(n.data[off:off+8], value)
 }
 
-// Search finds the index of the given key using binary search.
+// compareKeys compares two composite keys.
+// Returns -1 if (a1,a2) < (b1,b2), 0 if equal, 1 if greater.
+func compareKeys(a1, a2, b1, b2 uint64) int {
+	if a1 < b1 {
+		return -1
+	} else if a1 > b1 {
+		return 1
+	}
+	// a1 == b1, compare a2 and b2
+	if a2 < b2 {
+		return -1
+	} else if a2 > b2 {
+		return 1
+	}
+	return 0
+}
+
+// Search finds the index of the given composite key using binary search.
 // Returns (index, found). If not found, index is where it should be inserted.
-func (n *LeafNode) Search(key uint64) (int, bool) {
+func (n *LeafNode) Search(key1, key2 uint64) (int, bool) {
 	count := n.KeyCount()
 	idx := sort.Search(count, func(i int) bool {
-		return n.GetKey(i) >= key
+		return compareKeys(n.GetKey1(i), n.GetKey2(i), key1, key2) >= 0
 	})
-	if idx < count && n.GetKey(idx) == key {
+	if idx < count && n.GetKey1(idx) == key1 && n.GetKey2(idx) == key2 {
 		return idx, true
 	}
 	return idx, false
 }
 
-// Get retrieves a value by key.
-func (n *LeafNode) Get(key uint64) (uint64, bool) {
-	idx, found := n.Search(key)
+// Get retrieves a value by composite key.
+func (n *LeafNode) Get(key1, key2 uint64) (uint64, bool) {
+	idx, found := n.Search(key1, key2)
 	if !found {
 		return 0, false
 	}
 	return n.getValue(idx), true
 }
 
-// Put inserts or updates a key-value pair.
+// Put inserts or updates a key-value pair with composite key.
 // Returns true if a new key was inserted, false if updated.
 // Panics if the node is full and key doesn't exist.
-func (n *LeafNode) Put(key, value uint64) bool {
-	idx, found := n.Search(key)
+func (n *LeafNode) Put(key1, key2, value uint64) bool {
+	idx, found := n.Search(key1, key2)
 
 	if found {
 		// Update existing key
@@ -128,32 +151,35 @@ func (n *LeafNode) Put(key, value uint64) bool {
 		panic("leaf node is full")
 	}
 
-	// Shift keys and values to make room
+	// Shift entries to make room
 	for i := count; i > idx; i-- {
-		n.setKey(i, n.GetKey(i-1))
+		n.setKey1(i, n.GetKey1(i-1))
+		n.setKey2(i, n.GetKey2(i-1))
 		n.setValue(i, n.getValue(i-1))
 	}
 
-	n.setKey(idx, key)
+	n.setKey1(idx, key1)
+	n.setKey2(idx, key2)
 	n.setValue(idx, value)
 	SetKeyCount(n.data, uint16(count+1))
 
 	return true
 }
 
-// Delete removes a key from the node.
+// Delete removes a composite key from the node.
 // Returns true if the key was found and removed.
-func (n *LeafNode) Delete(key uint64) bool {
-	idx, found := n.Search(key)
+func (n *LeafNode) Delete(key1, key2 uint64) bool {
+	idx, found := n.Search(key1, key2)
 	if !found {
 		return false
 	}
 
 	count := n.KeyCount()
 
-	// Shift keys and values to fill the gap
+	// Shift entries to fill the gap
 	for i := idx; i < count-1; i++ {
-		n.setKey(i, n.GetKey(i+1))
+		n.setKey1(i, n.GetKey1(i+1))
+		n.setKey2(i, n.GetKey2(i+1))
 		n.setValue(i, n.getValue(i+1))
 	}
 
@@ -161,7 +187,7 @@ func (n *LeafNode) Delete(key uint64) bool {
 	return true
 }
 
-// Split splits the node into two, returning the middle key and new node.
+// Split splits the node into two, returning the middle key1 and new node.
 // The new node contains the upper half of keys.
 // Caller is responsible for providing the new node's data buffer.
 func (n *LeafNode) Split(newData []byte) (uint64, *LeafNode) {
@@ -173,7 +199,8 @@ func (n *LeafNode) Split(newData []byte) (uint64, *LeafNode) {
 
 	// Copy upper half to new node
 	for i := mid; i < count; i++ {
-		newNode.setKey(i-mid, n.GetKey(i))
+		newNode.setKey1(i-mid, n.GetKey1(i))
+		newNode.setKey2(i-mid, n.GetKey2(i))
 		newNode.setValue(i-mid, n.getValue(i))
 	}
 	SetKeyCount(newData, uint16(count-mid))
@@ -184,25 +211,27 @@ func (n *LeafNode) Split(newData []byte) (uint64, *LeafNode) {
 	// Link leaves
 	newNode.SetNextLeaf(n.NextLeaf())
 
-	// Return the first key of the new node
-	return newNode.GetKey(0), newNode
+	// Return the first key1 of the new node (used for separator)
+	return newNode.GetKey1(0), newNode
 }
 
-// Range returns all key-value pairs where start <= key <= end.
-func (n *LeafNode) Range(start, end uint64) []KVPair {
+// Range returns all key-value pairs where (start1,start2) <= (key1,key2) <= (end1,end2).
+func (n *LeafNode) Range(start1, start2, end1, end2 uint64) []KVPair {
 	var results []KVPair
 	count := n.KeyCount()
 
 	// Find starting position
-	startIdx, _ := n.Search(start)
+	startIdx, _ := n.Search(start1, start2)
 
 	for i := startIdx; i < count; i++ {
-		key := n.GetKey(i)
-		if key > end {
+		key1 := n.GetKey1(i)
+		key2 := n.GetKey2(i)
+		if compareKeys(key1, key2, end1, end2) > 0 {
 			break
 		}
 		results = append(results, KVPair{
-			Key:   key,
+			Key1:  key1,
+			Key2:  key2,
 			Value: n.getValue(i),
 		})
 	}
@@ -210,9 +239,14 @@ func (n *LeafNode) Range(start, end uint64) []KVPair {
 	return results
 }
 
-// GetKeyAt returns the key at the given index.
-func (n *LeafNode) GetKeyAt(idx int) uint64 {
-	return n.GetKey(idx)
+// GetKey1At returns the key1 at the given index.
+func (n *LeafNode) GetKey1At(idx int) uint64 {
+	return n.GetKey1(idx)
+}
+
+// GetKey2At returns the key2 at the given index.
+func (n *LeafNode) GetKey2At(idx int) uint64 {
+	return n.GetKey2(idx)
 }
 
 // GetValueAt returns the value at the given index.
@@ -232,49 +266,54 @@ func (n *LeafNode) CanLendTo() bool {
 }
 
 // BorrowFromRight borrows the first key from the right sibling.
-// Returns the new separator key for the parent.
+// Returns the new separator key1 for the parent.
 func (n *LeafNode) BorrowFromRight(right *LeafNode) uint64 {
-	// Get the first key-value from right sibling
-	key := right.GetKey(0)
+	// Get the first entry from right sibling
+	key1 := right.GetKey1(0)
+	key2 := right.GetKey2(0)
 	value := right.getValue(0)
 
 	// Append to this node
 	count := n.KeyCount()
-	n.setKey(count, key)
+	n.setKey1(count, key1)
+	n.setKey2(count, key2)
 	n.setValue(count, value)
 	SetKeyCount(n.data, uint16(count+1))
 
 	// Remove from right sibling
-	right.Delete(key)
+	right.Delete(key1, key2)
 
-	// Return the new separator (first key of right sibling after borrow)
-	return right.GetKey(0)
+	// Return the new separator (first key1 of right sibling after borrow)
+	return right.GetKey1(0)
 }
 
 // BorrowFromLeft borrows the last key from the left sibling.
-// Returns the new separator key for the parent.
+// Returns the new separator key1 for the parent.
 func (n *LeafNode) BorrowFromLeft(left *LeafNode) uint64 {
 	leftCount := left.KeyCount()
-	key := left.GetKey(leftCount - 1)
+	key1 := left.GetKey1(leftCount - 1)
+	key2 := left.GetKey2(leftCount - 1)
 	value := left.getValue(leftCount - 1)
 
-	// Shift all keys in this node to make room at position 0
+	// Shift all entries in this node to make room at position 0
 	count := n.KeyCount()
 	for i := count; i > 0; i-- {
-		n.setKey(i, n.GetKey(i-1))
+		n.setKey1(i, n.GetKey1(i-1))
+		n.setKey2(i, n.GetKey2(i-1))
 		n.setValue(i, n.getValue(i-1))
 	}
 
-	// Insert borrowed key at position 0
-	n.setKey(0, key)
+	// Insert borrowed entry at position 0
+	n.setKey1(0, key1)
+	n.setKey2(0, key2)
 	n.setValue(0, value)
 	SetKeyCount(n.data, uint16(count+1))
 
 	// Remove from left sibling
 	SetKeyCount(left.data, uint16(leftCount-1))
 
-	// Return the new separator (first key of this node)
-	return n.GetKey(0)
+	// Return the new separator (first key1 of this node)
+	return n.GetKey1(0)
 }
 
 // MergeWith merges the right sibling into this node.
@@ -283,9 +322,10 @@ func (n *LeafNode) MergeWith(right *LeafNode) {
 	count := n.KeyCount()
 	rightCount := right.KeyCount()
 
-	// Copy all keys from right to this node
+	// Copy all entries from right to this node
 	for i := 0; i < rightCount; i++ {
-		n.setKey(count+i, right.GetKey(i))
+		n.setKey1(count+i, right.GetKey1(i))
+		n.setKey2(count+i, right.GetKey2(i))
 		n.setValue(count+i, right.getValue(i))
 	}
 

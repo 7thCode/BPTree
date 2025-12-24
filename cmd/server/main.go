@@ -40,15 +40,17 @@ type StatusResponse struct {
 	Count     int    `json:"count,omitempty"`
 }
 
-// KeyValue represents a key-value pair.
+// KeyValue represents a key-value pair with composite key.
 type KeyValue struct {
-	Key   uint64 `json:"key"`
+	Key1  uint64 `json:"key1"`
+	Key2  uint64 `json:"key2"`
 	Value uint64 `json:"value"`
 }
 
 // InsertRequest is the request body for INSERT operations.
 type InsertRequest struct {
-	Key   uint64 `json:"key"`
+	Key1  uint64 `json:"key1"`
+	Key2  uint64 `json:"key2"`
 	Value uint64 `json:"value"`
 }
 
@@ -65,8 +67,9 @@ type FindRangeResult struct {
 
 // BenchmarkRequest is the request body for benchmark operations.
 type BenchmarkRequest struct {
-	Count    int    `json:"count"`    // Number of operations
-	KeyRange uint64 `json:"keyRange"` // Max key value for random generation
+	Count     int    `json:"count"`     // Number of operations
+	Key1Range uint64 `json:"key1Range"` // Max key1 value for random generation
+	Key2Range uint64 `json:"key2Range"` // Max key2 value for random generation
 }
 
 // BenchmarkResult contains benchmark timing results.
@@ -238,15 +241,22 @@ func (s *Server) handleFind(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	keyStr := r.URL.Query().Get("key")
-	if keyStr == "" {
-		writeJSON(w, http.StatusBadRequest, Response{Error: "key is required"})
+	key1Str := r.URL.Query().Get("key1")
+	key2Str := r.URL.Query().Get("key2")
+	if key1Str == "" || key2Str == "" {
+		writeJSON(w, http.StatusBadRequest, Response{Error: "key1 and key2 are required"})
 		return
 	}
 
-	key, err := strconv.ParseUint(keyStr, 10, 64)
+	key1, err := strconv.ParseUint(key1Str, 10, 64)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, Response{Error: "invalid key format"})
+		writeJSON(w, http.StatusBadRequest, Response{Error: "invalid key1 format"})
+		return
+	}
+
+	key2, err := strconv.ParseUint(key2Str, 10, 64)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, Response{Error: "invalid key2 format"})
 		return
 	}
 
@@ -258,7 +268,7 @@ func (s *Server) handleFind(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	val, found := s.tree.Find(s.rootID, key)
+	val, found := s.tree.Find(s.rootID, key1, key2)
 	if !found {
 		writeJSON(w, http.StatusNotFound, Response{Error: "key not found"})
 		return
@@ -266,7 +276,7 @@ func (s *Server) handleFind(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, Response{
 		Success: true,
-		Data:    KeyValue{Key: key, Value: val},
+		Data:    KeyValue{Key1: key1, Key2: key2, Value: val},
 	})
 }
 
@@ -290,7 +300,7 @@ func (s *Server) handleInsert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.tree.Insert(s.rootID, req.Key, req.Value); err != nil {
+	if err := s.tree.Insert(s.rootID, req.Key1, req.Key2, req.Value); err != nil {
 		writeJSON(w, http.StatusInternalServerError, Response{Error: fmt.Sprintf("insert failed: %v", err)})
 		return
 	}
@@ -303,7 +313,7 @@ func (s *Server) handleInsert(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, Response{
 		Success: true,
-		Data:    KeyValue{Key: req.Key, Value: req.Value},
+		Data:    KeyValue{Key1: req.Key1, Key2: req.Key2, Value: req.Value},
 	})
 }
 
@@ -313,15 +323,22 @@ func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	keyStr := r.URL.Query().Get("key")
-	if keyStr == "" {
-		writeJSON(w, http.StatusBadRequest, Response{Error: "key is required"})
+	key1Str := r.URL.Query().Get("key1")
+	key2Str := r.URL.Query().Get("key2")
+	if key1Str == "" || key2Str == "" {
+		writeJSON(w, http.StatusBadRequest, Response{Error: "key1 and key2 are required"})
 		return
 	}
 
-	key, err := strconv.ParseUint(keyStr, 10, 64)
+	key1, err := strconv.ParseUint(key1Str, 10, 64)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, Response{Error: "invalid key format"})
+		writeJSON(w, http.StatusBadRequest, Response{Error: "invalid key1 format"})
+		return
+	}
+
+	key2, err := strconv.ParseUint(key2Str, 10, 64)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, Response{Error: "invalid key2 format"})
 		return
 	}
 
@@ -333,7 +350,7 @@ func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	deleted := s.tree.Delete(s.rootID, key)
+	deleted := s.tree.Delete(s.rootID, key1, key2)
 
 	// Auto-flash to ensure data is persisted
 	if deleted {
@@ -355,23 +372,37 @@ func (s *Server) handleFindRange(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	startStr := r.URL.Query().Get("start")
-	endStr := r.URL.Query().Get("end")
+	start1Str := r.URL.Query().Get("start1")
+	start2Str := r.URL.Query().Get("start2")
+	end1Str := r.URL.Query().Get("end1")
+	end2Str := r.URL.Query().Get("end2")
 
-	if startStr == "" || endStr == "" {
-		writeJSON(w, http.StatusBadRequest, Response{Error: "start and end are required"})
+	if start1Str == "" || start2Str == "" || end1Str == "" || end2Str == "" {
+		writeJSON(w, http.StatusBadRequest, Response{Error: "start1, start2, end1, and end2 are required"})
 		return
 	}
 
-	start, err := strconv.ParseUint(startStr, 10, 64)
+	start1, err := strconv.ParseUint(start1Str, 10, 64)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, Response{Error: "invalid start format"})
+		writeJSON(w, http.StatusBadRequest, Response{Error: "invalid start1 format"})
 		return
 	}
 
-	end, err := strconv.ParseUint(endStr, 10, 64)
+	start2, err := strconv.ParseUint(start2Str, 10, 64)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, Response{Error: "invalid end format"})
+		writeJSON(w, http.StatusBadRequest, Response{Error: "invalid start2 format"})
+		return
+	}
+
+	end1, err := strconv.ParseUint(end1Str, 10, 64)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, Response{Error: "invalid end1 format"})
+		return
+	}
+
+	end2, err := strconv.ParseUint(end2Str, 10, 64)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, Response{Error: "invalid end2 format"})
 		return
 	}
 
@@ -384,8 +415,8 @@ func (s *Server) handleFindRange(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var items []KeyValue
-	err = s.tree.FindRange(s.rootID, start, end, func(key, value uint64) bool {
-		items = append(items, KeyValue{Key: key, Value: value})
+	err = s.tree.FindRange(s.rootID, start1, start2, end1, end2, func(key1, key2, value uint64) bool {
+		items = append(items, KeyValue{Key1: key1, Key2: key2, Value: value})
 		return true
 	})
 
@@ -458,8 +489,11 @@ func (s *Server) handleBenchmark(w http.ResponseWriter, r *http.Request) {
 	if req.Count <= 0 {
 		req.Count = 10000
 	}
-	if req.KeyRange == 0 {
-		req.KeyRange = 1000000
+	if req.Key1Range == 0 {
+		req.Key1Range = 1000000
+	}
+	if req.Key2Range == 0 {
+		req.Key2Range = 1000000
 	}
 
 	s.mu.Lock()
@@ -472,16 +506,18 @@ func (s *Server) handleBenchmark(w http.ResponseWriter, r *http.Request) {
 
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	// Generate random keys for testing
-	keys := make([]uint64, req.Count)
-	for i := range keys {
-		keys[i] = rng.Uint64() % req.KeyRange
+	// Generate random keys for testing (key1 and key2 with separate ranges)
+	keys1 := make([]uint64, req.Count)
+	keys2 := make([]uint64, req.Count)
+	for i := range keys1 {
+		keys1[i] = rng.Uint64() % req.Key1Range
+		keys2[i] = rng.Uint64() % req.Key2Range
 	}
 
 	// Benchmark Insert
 	insertStart := time.Now()
-	for i, key := range keys {
-		if err := s.tree.Insert(s.rootID, key, uint64(i)); err != nil {
+	for i := 0; i < len(keys1); i++ {
+		if err := s.tree.Insert(s.rootID, keys1[i], keys2[i], uint64(i)); err != nil {
 			writeJSON(w, http.StatusInternalServerError, Response{Error: fmt.Sprintf("insert failed at %d: %v", i, err)})
 			return
 		}
@@ -491,8 +527,8 @@ func (s *Server) handleBenchmark(w http.ResponseWriter, r *http.Request) {
 	// Benchmark Search
 	hits := 0
 	searchStart := time.Now()
-	for _, key := range keys {
-		if _, found := s.tree.Find(s.rootID, key); found {
+	for i := 0; i < len(keys1); i++ {
+		if _, found := s.tree.Find(s.rootID, keys1[i], keys2[i]); found {
 			hits++
 		}
 	}
